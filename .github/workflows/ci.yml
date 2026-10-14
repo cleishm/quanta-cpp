@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # clang-format is pinned so that CI and local checks agree; versions differ
+  # in their output.
+  format-check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install clang-format
+        run: pipx install clang-format==23.1.0
+
+      - name: Check formatting
+        run: |
+          clang-format --version
+          cmake -B build -DCLANG_FORMAT_EXECUTABLE="$(command -v clang-format)"
+          cmake --build build --target format-check
+
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            compiler: g++-12
+            cxx: g++-12
+          - os: ubuntu-24.04
+            compiler: g++-13
+            cxx: g++-13
+          - os: ubuntu-24.04
+            compiler: g++-14
+            cxx: g++-14
+          - os: ubuntu-24.04
+            compiler: clang-17
+            cxx: clang++-17
+          - os: macos-latest
+            compiler: clang
+            cxx: clang++
+          - os: windows-latest
+            compiler: msvc
+            cxx: cl
+
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.os }} / ${{ matrix.compiler }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install GCC (Linux)
+        if: matrix.os == 'ubuntu-24.04' && startsWith(matrix.compiler, 'g++')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.compiler }}
+
+      - name: Install Clang (Linux)
+        if: matrix.os == 'ubuntu-24.04' && startsWith(matrix.compiler, 'clang')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.compiler }}
+
+      - name: Configure (Unix)
+        if: matrix.os != 'windows-latest'
+        env:
+          CXX: ${{ matrix.cxx }}
+        run: cmake -B build -DQUANTA_BUILD_TESTS=ON
+
+      - name: Configure (Windows)
+        if: matrix.os == 'windows-latest'
+        run: cmake -B build -DQUANTA_BUILD_TESTS=ON -DCMAKE_CXX_FLAGS="/EHsc"
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Test (Unix)
+        if: matrix.os != 'windows-latest'
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Test (Windows)
+        if: matrix.os == 'windows-latest'
+        run: ctest --test-dir build -C Release --output-on-failure
+
+  # The single status check that branch protection requires, so the required
+  # check doesn't change when jobs or matrix entries do.
+  all-checks:
+    if: always()
+    needs: [format-check, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check that every required job succeeded
+        env:
+          # always() means this job runs even when a dependency fails, so the
+          # results have to be inspected rather than inferred from getting here.
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for result in $RESULTS; do
+            if [ "$result" != "success" ]; then
+              echo "::error::a required job did not succeed"
+              exit 1
+            fi
+          done
+          echo "all required jobs succeeded"

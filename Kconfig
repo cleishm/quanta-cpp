@@ -1,0 +1,12 @@
+menu "Quanta Library"
+
+    config QUANTA_STD_FORMAT_SUPPORT
+        bool "Enable std::format support"
+        default y
+        help
+            Provide std::formatter specializations for quanta types where
+            the toolchain provides <format>; toolchains without it (such as
+            the GCC 12 of ESP-IDF 5.1) build without them. Disable to
+            turn std::format support off.
+
+endmenu

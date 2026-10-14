@@ -1,0 +1,1460 @@
+// Unit tests for frequency library
+// Uses Catch2 test framework with compile-time static_asserts
+
+#include <catch2/catch_approx.hpp>
+#include <catch2/catch_test_macros.hpp>
+#include <chrono>
+#include <cstdint>
+#include <limits>
+#include <quanta/frequency>
+#include <ratio>
+
+using namespace quanta::frequency;
+using namespace quanta::frequency_literals;
+
+// A minimal distance type for the wavelength tests: chrono-shaped, with
+// count(), rep and period, but not a std::chrono::duration. It stands in for
+// quanta::spatial::meters to check that wavelength() accepts any distance_like
+// type (duck typing), not only the quanta length types.
+template<typename Rep, typename Period = std::ratio<1>>
+struct test_distance {
+    using rep = Rep;
+    using period = Period;
+
+    constexpr test_distance() = default;
+    constexpr explicit test_distance(Rep r)
+        : value(r) {}
+
+    constexpr Rep count() const { return value; }
+    static constexpr test_distance max() { return test_distance(std::numeric_limits<Rep>::max()); }
+    friend constexpr bool operator==(const test_distance&, const test_distance&) = default;
+
+    Rep value{};
+};
+
+// An area-like type: count() and rep, but no period.
+struct test_area {
+    using rep = int64_t;
+    constexpr int64_t count() const { return 0; }
+};
+
+template<typename Duration>
+concept has_period = requires(hertz f) { f.period<Duration>(); };
+
+template<typename Distance>
+concept has_wavelength = requires(hertz f) { f.wavelength<Distance>(); };
+
+template<typename Distance, typename Duration>
+concept has_wavelength_for = requires(hertz f, Duration d) { f.wavelength<Distance>(d); };
+
+// duration_like accepts only std::chrono::duration specializations, so a
+// chrono-shaped type such as a length is not mistaken for a duration.
+static_assert(duration_like<std::chrono::seconds>);
+static_assert(duration_like<std::chrono::duration<double, std::milli>>);
+static_assert(!duration_like<test_distance<int64_t>>);
+static_assert(!duration_like<int>);
+static_assert(has_period<std::chrono::milliseconds>);
+static_assert(!has_period<test_distance<int64_t, std::milli>>);
+
+// distance_like accepts chrono-shaped types other than durations.
+static_assert(distance_like<test_distance<int64_t>>);
+static_assert(distance_like<test_distance<double, std::milli>>);
+static_assert(!distance_like<std::chrono::seconds>);
+static_assert(!distance_like<std::chrono::duration<double>>);
+static_assert(!distance_like<test_area>);
+static_assert(!distance_like<int>);
+static_assert(has_wavelength<test_distance<int64_t, std::milli>>);
+static_assert(!has_wavelength<std::chrono::seconds>);
+static_assert(!has_wavelength<test_area>);
+static_assert(has_wavelength_for<test_distance<int64_t>, std::chrono::nanoseconds>);
+static_assert(!has_wavelength_for<std::chrono::seconds, std::chrono::nanoseconds>);
+static_assert(!has_wavelength_for<test_distance<int64_t>, test_distance<int64_t>>);
+
+// =============================================================================
+// Compile-time tests (static_assert)
+// These verify correctness at compile time - if this file compiles, they pass.
+// =============================================================================
+
+// Frequency construction and arithmetic
+static_assert(hertz(10).count() == 10);
+static_assert(hertz(5) + hertz(3) == hertz(8));
+static_assert(hertz(5) - hertz(3) == hertz(2));
+static_assert(hertz(5) * 2 == hertz(10));
+static_assert(hertz(10) / 2 == hertz(5));
+
+// Frequency precision conversions
+static_assert(hertz(1) == millihertz(1000));
+static_assert(kilohertz(1) == hertz(1000));
+static_assert(megahertz(1) == kilohertz(1000));
+static_assert(gigahertz(1) == megahertz(1000));
+static_assert(terahertz(1) == gigahertz(1000));
+
+// Construction and count
+static_assert(millihertz(1000).count() == 1000);
+static_assert(hertz(1000).count() == 1000);
+static_assert(kilohertz(80).count() == 80);
+static_assert(megahertz(80).count() == 80);
+static_assert(gigahertz(2).count() == 2);
+static_assert(terahertz(1).count() == 1);
+
+// Precision conversions (implicit lossless)
+constexpr millihertz mhz_from_hz = hertz(1);
+static_assert(mhz_from_hz.count() == 1000);
+constexpr hertz hz_from_khz = kilohertz(1);
+static_assert(hz_from_khz.count() == 1000);
+constexpr kilohertz khz_from_mhz = megahertz(1);
+static_assert(khz_from_mhz.count() == 1000);
+constexpr megahertz mhz_from_ghz = gigahertz(1);
+static_assert(mhz_from_ghz.count() == 1000);
+constexpr gigahertz ghz_from_thz = terahertz(1);
+static_assert(ghz_from_thz.count() == 1000);
+
+// Explicit lossy conversions
+static_assert(hertz(millihertz(1500)).count() == 1);
+static_assert(kilohertz(hertz(1500)).count() == 1);
+
+// Comparison operators
+static_assert(hertz(1000) == hertz(1000));
+static_assert(hertz(1000) != hertz(1001));
+static_assert(hertz(1000) < hertz(1001));
+static_assert(hertz(1001) > hertz(1000));
+static_assert(hertz(1000) <= hertz(1001));
+static_assert(hertz(1001) >= hertz(1000));
+static_assert(millihertz(hertz(1)) == millihertz(1000));
+
+// Literals
+static_assert((1000_mHz).count() == 1000);
+static_assert((1000_Hz).count() == 1000);
+static_assert((80_kHz).count() == 80);
+static_assert((80_MHz).count() == 80);
+static_assert((2_GHz).count() == 2);
+static_assert((1_THz).count() == 1);
+
+// min/max
+static_assert(hertz::min().count() < 0);
+static_assert(hertz::max().count() > 0);
+
+// Modulo operations
+static_assert((hertz(10) % 3).count() == 1);
+static_assert((hertz(10) % hertz(3)).count() == 1);
+
+// Division returning scalar
+static_assert(hertz(10) / hertz(2) == 5);
+static_assert(kilohertz(10) / kilohertz(2) == 5);
+
+// Harmonics and subharmonics
+static_assert(hertz(100).harmonic(2) == hertz(200));
+static_assert(hertz(100).harmonic(3) == hertz(300));
+static_assert(hertz(440).harmonic(2) == hertz(880));
+static_assert(kilohertz(1).harmonic(5) == kilohertz(5));
+static_assert(hertz(1000).subharmonic(2) == hertz(500));
+static_assert(hertz(900).subharmonic(3) == hertz(300));
+static_assert(hertz(880).subharmonic(2) == hertz(440));
+static_assert(kilohertz(10).subharmonic(5) == kilohertz(2));
+
+// Rounding functions
+static_assert(floor<kilohertz>(hertz(1500)).count() == 1);
+static_assert(floor<kilohertz>(hertz(1999)).count() == 1);
+static_assert(floor<kilohertz>(hertz(2000)).count() == 2);
+static_assert(ceil<kilohertz>(hertz(1500)).count() == 2);
+static_assert(ceil<kilohertz>(hertz(1001)).count() == 2);
+static_assert(ceil<kilohertz>(hertz(1000)).count() == 1);
+static_assert(round<kilohertz>(hertz(1500)).count() == 2); // ties to even
+static_assert(round<kilohertz>(hertz(2500)).count() == 2); // ties to even
+static_assert(round<kilohertz>(hertz(1499)).count() == 1);
+static_assert(round<kilohertz>(hertz(1501)).count() == 2);
+static_assert(abs(hertz(100)).count() == 100);
+static_assert(abs(hertz(-100)).count() == 100);
+static_assert(abs(hertz(0)).count() == 0);
+
+// beat
+static_assert(beat(100_Hz, 40_Hz) == 60_Hz);
+static_assert(beat(40_Hz, 100_Hz) == 60_Hz);        // commutative
+static_assert(beat(1000_Hz, 1000_Hz).count() == 0); // same frequency
+
+// =============================================================================
+// Runtime tests (Catch2 TEST_CASE)
+// =============================================================================
+
+TEST_CASE("frequency construction", "[frequency]") {
+    REQUIRE(hertz(10).count() == 10);
+    REQUIRE(hertz::zero().count() == 0);
+}
+
+TEST_CASE("frequency arithmetic", "[frequency]") {
+    REQUIRE((hertz(5) + hertz(3)).count() == 8);
+    REQUIRE((hertz(5) - hertz(3)).count() == 2);
+    REQUIRE((hertz(5) * 2).count() == 10);
+    REQUIRE((hertz(10) / 2).count() == 5);
+}
+
+TEST_CASE("frequency precision conversion Hz to mHz", "[frequency]") {
+    // Hz to mHz (implicit, lossless - multiplies by 1000)
+    millihertz mhz = hertz(1);
+    REQUIRE(mhz.count() == 1000);
+
+    millihertz mhz2 = hertz(25);
+    REQUIRE(mhz2.count() == 25000);
+}
+
+TEST_CASE("frequency precision conversion mHz to Hz", "[frequency]") {
+    // mHz to Hz (explicit, lossy - divides by 1000)
+    hertz hz = frequency_cast<hertz>(millihertz(1500));
+    REQUIRE(hz.count() == 1); // truncates
+
+    hertz hz2 = frequency_cast<hertz>(millihertz(1999));
+    REQUIRE(hz2.count() == 1); // still truncates
+}
+
+TEST_CASE("frequency precision conversion kHz to Hz", "[frequency]") {
+    hertz hz = kilohertz(1); // implicit, lossless
+    REQUIRE(hz.count() == 1000);
+
+    hertz hz2 = kilohertz(80);
+    REQUIRE(hz2.count() == 80000);
+}
+
+TEST_CASE("frequency precision conversion Hz to kHz", "[frequency]") {
+    // Hz to kHz (explicit, lossy)
+    kilohertz khz = frequency_cast<kilohertz>(hertz(1500));
+    REQUIRE(khz.count() == 1); // truncates
+}
+
+TEST_CASE("frequency precision conversion MHz to kHz", "[frequency]") {
+    kilohertz khz = megahertz(1); // implicit, lossless
+    REQUIRE(khz.count() == 1000);
+
+    kilohertz khz2 = megahertz(80);
+    REQUIRE(khz2.count() == 80000);
+}
+
+TEST_CASE("frequency precision conversion GHz to MHz", "[frequency]") {
+    megahertz mhz = gigahertz(1); // implicit, lossless
+    REQUIRE(mhz.count() == 1000);
+
+    megahertz mhz2 = gigahertz(2);
+    REQUIRE(mhz2.count() == 2000);
+}
+
+TEST_CASE("frequency increment/decrement", "[frequency]") {
+    hertz f(10);
+
+    ++f;
+    REQUIRE(f.count() == 11);
+
+    --f;
+    REQUIRE(f.count() == 10);
+
+    f++;
+    REQUIRE(f.count() == 11);
+
+    f--;
+    REQUIRE(f.count() == 10);
+}
+
+TEST_CASE("frequency compound assignment", "[frequency]") {
+    hertz f(10);
+
+    f += hertz(5);
+    REQUIRE(f.count() == 15);
+
+    f -= hertz(3);
+    REQUIRE(f.count() == 12);
+
+    f *= 2;
+    REQUIRE(f.count() == 24);
+
+    f /= 4;
+    REQUIRE(f.count() == 6);
+}
+
+TEST_CASE("frequency comparison", "[frequency]") {
+    REQUIRE(hertz(1000) == hertz(1000));
+    REQUIRE(hertz(1000) != hertz(1001));
+    REQUIRE(hertz(1000) < hertz(1001));
+    REQUIRE(hertz(1001) > hertz(1000));
+    REQUIRE(hertz(1000) <= hertz(1000));
+    REQUIRE(hertz(1000) <= hertz(1001));
+    REQUIRE(hertz(1001) >= hertz(1001));
+    REQUIRE(hertz(1001) >= hertz(1000));
+}
+
+TEST_CASE("frequency cross-precision comparison", "[frequency]") {
+    REQUIRE(hertz(1) == millihertz(1000));
+    REQUIRE(kilohertz(1) == hertz(1000));
+    REQUIRE(megahertz(1) == kilohertz(1000));
+    REQUIRE(gigahertz(1) == megahertz(1000));
+}
+
+TEST_CASE("frequency literals", "[frequency][literals]") {
+    REQUIRE((1000_mHz).count() == 1000);
+    REQUIRE((1000_Hz).count() == 1000);
+    REQUIRE((80_kHz).count() == 80);
+    REQUIRE((80_MHz).count() == 80);
+    REQUIRE((2_GHz).count() == 2);
+}
+
+TEST_CASE("literals follow C++ integer-literal rules", "[frequency][literals]") {
+    // Digit separators
+    REQUIRE((1'000_Hz).count() == 1000);
+    REQUIRE((2'400'000_kHz).count() == 2400000);
+    // Hexadecimal, binary and octal, as for std::chrono literals (0123h is 83 h)
+    REQUIRE((0x10_Hz).count() == 16);
+    REQUIRE((0XfF_kHz).count() == 255);
+    REQUIRE((0b101_MHz).count() == 5);
+    REQUIRE((0B1'0000_Hz).count() == 16);
+    REQUIRE((0123_Hz).count() == 83);
+    REQUIRE((0123_Hz).count() == std::chrono::hours(0123).count());
+    REQUIRE((0'17_mHz).count() == 15);
+    // Zero in every base
+    REQUIRE((0_Hz).count() == 0);
+    REQUIRE((00_Hz).count() == 0);
+    REQUIRE((0x0_Hz).count() == 0);
+    REQUIRE((0b0_Hz).count() == 0);
+    // The largest representable count
+    REQUIRE((9'223'372'036'854'775'807_Hz).count() == std::numeric_limits<int64_t>::max());
+    REQUIRE((0x7fff'ffff'ffff'ffff_Hz).count() == std::numeric_limits<int64_t>::max());
+}
+
+TEST_CASE("frequency modulo", "[frequency]") {
+    REQUIRE((hertz(10) % 3).count() == 1);
+    REQUIRE((hertz(10) % hertz(3)).count() == 1);
+}
+
+TEST_CASE("frequency division returning scalar", "[frequency]") {
+    REQUIRE(hertz(10) / hertz(2) == 5);
+    REQUIRE(kilohertz(10) / kilohertz(2) == 5);
+}
+
+TEST_CASE("trunc", "[frequency][rounding]") {
+    REQUIRE(trunc<kilohertz>(hertz(1500)) == kilohertz(1));
+    REQUIRE(trunc<kilohertz>(hertz(-1500)) == kilohertz(-1));
+    REQUIRE(trunc<kilohertz>(hertz(1999)) == kilohertz(1));
+    REQUIRE(trunc<kilohertz>(hertz(0)) == kilohertz(0));
+    REQUIRE(trunc<hertz>(frequency<double>(1.7)) == hertz(1));
+    REQUIRE(trunc<hertz>(frequency<double>(-1.7)) == hertz(-1));
+    REQUIRE(trunc<hertz>(kilohertz(5)) == hertz(5000));
+    REQUIRE(trunc<frequency<double, std::kilo>>(hertz(1500)).count() == 1.5);
+    static_assert(trunc<kilohertz>(hertz(-1999)) == kilohertz(-1));
+}
+
+TEST_CASE("rounding from a floating-point rep", "[frequency][rounding]") {
+    REQUIRE(floor<hertz>(frequency<double>(1.5)) == hertz(1));
+    REQUIRE(floor<hertz>(frequency<double>(-1.5)) == hertz(-2));
+    REQUIRE(ceil<hertz>(frequency<double>(1.2)) == hertz(2));
+    REQUIRE(ceil<hertz>(frequency<double>(-1.2)) == hertz(-1));
+    REQUIRE(round<hertz>(frequency<double>(1.7)) == hertz(2));
+    REQUIRE(round<hertz>(frequency<double>(-1.7)) == hertz(-2));
+    REQUIRE(round<hertz>(frequency<double>(1.2)) == hertz(1));
+    REQUIRE(round<hertz>(frequency<double>(1.5)) == hertz(2));   // tie to even
+    REQUIRE(round<hertz>(frequency<double>(2.5)) == hertz(2));   // tie to even
+    REQUIRE(round<hertz>(frequency<double>(-2.5)) == hertz(-2)); // tie to even
+
+    // Across precisions
+    REQUIRE(floor<kilohertz>(frequency<double>(1500.5)) == kilohertz(1));
+    REQUIRE(ceil<kilohertz>(frequency<double>(1500.5)) == kilohertz(2));
+    REQUIRE(round<kilohertz>(frequency<double>(1500.5)) == kilohertz(2));
+    REQUIRE(floor<millihertz>(frequency<double>(-0.0009765625)) == millihertz(-1));
+    REQUIRE(ceil<millihertz>(frequency<double>(-0.0009765625)) == millihertz(0));
+
+    // A floating-point target is not rounded
+    REQUIRE(floor<frequency<double, std::kilo>>(hertz(1500)).count() == 1.5);
+    REQUIRE(ceil<frequency<double, std::kilo>>(hertz(1500)).count() == 1.5);
+    REQUIRE(round<frequency<double, std::kilo>>(hertz(1500)).count() == 1.5);
+}
+
+TEST_CASE("to_string", "[frequency][string]") {
+    REQUIRE(to_string(millihertz(1000)) == "1000mHz");
+    REQUIRE(to_string(hertz(1000)) == "1000Hz");
+    REQUIRE(to_string(kilohertz(80)) == "80kHz");
+    REQUIRE(to_string(megahertz(80)) == "80MHz");
+    REQUIRE(to_string(gigahertz(2)) == "2GHz");
+    REQUIRE(to_string(terahertz(5)) == "5THz");
+    REQUIRE(to_string(hertz(-440)) == "-440Hz");
+}
+
+TEST_CASE("to_string floating-point uses shortest fixed notation", "[frequency][string]") {
+    REQUIRE(to_string(frequency<double>(440.5)) == "440.5Hz");
+    REQUIRE(to_string(frequency<double>(1e6)) == "1000000Hz");
+    REQUIRE(to_string(frequency<double>(0.00001)) == "0.00001Hz");
+    REQUIRE(to_string(frequency<double, std::kilo>(2.5)) == "2.5kHz");
+    REQUIRE(to_string(frequency<double, std::milli>(-1.25)) == "-1.25mHz");
+    REQUIRE(to_string(frequency<float>(0.5f)) == "0.5Hz");
+}
+
+TEST_CASE("to_string base_unit", "[frequency][string]") {
+    REQUIRE(to_string(millihertz(1500), base_unit) == "1.5Hz");
+    REQUIRE(to_string(millihertz(24), base_unit) == "0.024Hz");
+    REQUIRE(to_string(kilohertz(433), base_unit) == "433000Hz");
+    REQUIRE(to_string(terahertz(5), base_unit) == "5000000000000Hz");
+    REQUIRE(to_string(hertz(-440), base_unit) == "-440Hz");
+    REQUIRE(to_string(kilohertz(0), base_unit) == "0Hz");
+    REQUIRE(to_string(frequency<double, std::mega>(2.5), base_unit) == "2500000Hz");
+    // Precisions with no SI prefix of their own still have a base unit.
+    REQUIRE(to_string(frequency<int64_t, std::deci>(225), base_unit) == "22.5Hz");
+}
+
+TEST_CASE("to_string scaled", "[frequency][string]") {
+    REQUIRE(to_string(megahertz(2400), scaled) == "2.4GHz");
+    REQUIRE(to_string(millihertz(1500), scaled) == "1.5Hz");
+    REQUIRE(to_string(millihertz(33), scaled) == "33mHz");
+    REQUIRE(to_string(hertz(999), scaled) == "999Hz");
+    REQUIRE(to_string(hertz(1000), scaled) == "1kHz");
+    REQUIRE(to_string(kilohertz(1500), scaled) == "1.5MHz");
+    REQUIRE(to_string(terahertz(5000), scaled) == "5000THz");
+    REQUIRE(to_string(hertz(-2500), scaled) == "-2.5kHz");
+    REQUIRE(to_string(hertz(-1), scaled) == "-1Hz");
+    REQUIRE(to_string(hertz(0), scaled) == "0Hz");
+    REQUIRE(to_string(millihertz(0), scaled) == "0Hz");
+    REQUIRE(to_string(gigahertz(0), scaled) == "0Hz");
+    // Below the smallest prefix the smallest is used.
+    REQUIRE(to_string(frequency<double, std::femto>(0.5), scaled) == "0.5fHz");
+    REQUIRE(to_string(frequency<double, std::micro>(0.25), scaled) == "250nHz");
+    // Precisions with no SI prefix of their own are scaled from hertz.
+    REQUIRE(to_string(frequency<int64_t, std::deci>(25), scaled) == "2.5Hz");
+    REQUIRE(to_string(frequency<int64_t, std::deci>(5), scaled) == "500mHz");
+    REQUIRE(to_string(frequency<int64_t, std::deca>(150), scaled) == "1.5kHz");
+    REQUIRE(to_string(frequency<int64_t, std::ratio<1, 4>>(10), scaled) == "2.5Hz");
+    REQUIRE(to_string(frequency<int64_t, std::ratio<1, 4>>(2), scaled) == "500mHz");
+}
+
+#if CONFIG_QUANTA_STD_FORMAT
+TEST_CASE("scaled form of non-finite values is in hertz", "[frequency][string]") {
+    constexpr double inf = std::numeric_limits<double>::infinity();
+    constexpr double nan = std::numeric_limits<double>::quiet_NaN();
+    REQUIRE(to_string(frequency<double>(inf), scaled) == "infHz");
+    REQUIRE(to_string(frequency<double>(-inf), scaled) == "-infHz");
+    REQUIRE(to_string(frequency<double>(nan), scaled) == "nanHz");
+    REQUIRE(to_string(frequency<double, std::kilo>(inf), scaled) == "infHz");
+    REQUIRE(to_string(frequency<double, std::milli>(-inf), scaled) == "-infHz");
+    REQUIRE(to_string(frequency<double, std::ratio<1, 60>>(nan), scaled) == "nanHz");
+#if CONFIG_QUANTA_STD_FORMAT
+    REQUIRE(std::format("{:s}", frequency<double>(inf)) == "infHz");
+    REQUIRE(std::format("{:s}", frequency<double>(-inf)) == "-infHz");
+    REQUIRE(std::format("{:s}", frequency<double>(nan)) == "nanHz");
+    REQUIRE(std::format("{:s.1f}", frequency<double, std::mega>(inf)) == "infHz");
+#endif
+}
+
+TEST_CASE("std::format frequency", "[frequency][string]") {
+    // Empty spec prints the exact stored count with a precision-qualified unit.
+    REQUIRE(std::format("{}", millihertz(1500)) == "1500mHz");
+    REQUIRE(std::format("{}", hertz(440)) == "440Hz");
+    REQUIRE(std::format("{}", kilohertz(433)) == "433kHz");
+    REQUIRE(std::format("{}", megahertz(868)) == "868MHz");
+    REQUIRE(std::format("{}", gigahertz(2)) == "2GHz");
+    REQUIRE(std::format("{}", terahertz(5)) == "5THz");
+    REQUIRE(std::format("{}", hertz(-440)) == "-440Hz");
+}
+
+TEST_CASE("std::format floating-point uses shortest fixed notation", "[frequency][string]") {
+    REQUIRE(std::format("{}", frequency<double>(440.5)) == "440.5Hz");
+    REQUIRE(std::format("{}", frequency<double>(1e6)) == "1000000Hz");
+    REQUIRE(std::format("{}", frequency<double>(0.00001)) == "0.00001Hz");
+    REQUIRE(std::format("{}", frequency<double, std::kilo>(2.5)) == "2.5kHz");
+}
+
+TEST_CASE("std::format with spec renders in the own unit", "[frequency][string]") {
+    // A format spec changes only how the number is rendered, never the unit.
+    REQUIRE(std::format("{:.1f}", millihertz(1500)) == "1500.0mHz");
+    REQUIRE(std::format("{:.2f}", millihertz(1534)) == "1534.00mHz");
+    REQUIRE(std::format("{:.1f}", hertz(440)) == "440.0Hz");
+    REQUIRE(std::format("{:g}", kilohertz(2)) == "2kHz");
+    REQUIRE(std::format("{:.1f}", megahertz(2400)) == "2400.0MHz");
+    REQUIRE(std::format("{:.1f}", hertz(-440)) == "-440.0Hz");
+    REQUIRE(std::format("{:.1f}", kilohertz(0)) == "0.0kHz");
+    REQUIRE(std::format("{:.3e}", frequency<double, std::giga>(2.4)) == "2.400e+00GHz");
+
+    // Width and alignment pass through to the numeric part.
+    REQUIRE(std::format("{:7.1f}", millihertz(1500)) == " 1500.0mHz");
+    REQUIRE(std::format("{:*<8.1f}", hertz(50)) == "50.0****Hz");
+}
+
+TEST_CASE("std::format with no SI prefix renders a spec in hertz", "[frequency][string]") {
+    // There is no unit label for the precision, so a spec falls back to hertz.
+    using decihertz = frequency<int64_t, std::deci>;
+    REQUIRE(std::format("{:.1f}", decihertz(225)) == "22.5Hz");
+    REQUIRE(std::format("{:g}", decihertz(-5)) == "-0.5Hz");
+}
+
+TEST_CASE("std::format b marker renders in hertz", "[frequency][string]") {
+    REQUIRE(std::format("{:b}", millihertz(1500)) == "1.5Hz");
+    REQUIRE(std::format("{:b}", millihertz(24)) == "0.024Hz");
+    REQUIRE(std::format("{:b}", kilohertz(433)) == "433000Hz");
+    REQUIRE(std::format("{:b}", terahertz(5)) == "5000000000000Hz");
+    REQUIRE(std::format("{:b.1f}", millihertz(1500)) == "1.5Hz");
+    REQUIRE(std::format("{:b.2f}", kilohertz(2)) == "2000.00Hz");
+    REQUIRE(std::format("{:b}", hertz(-440)) == "-440Hz");
+    REQUIRE(std::format("{:b.1f}", millihertz(-1500)) == "-1.5Hz");
+    REQUIRE(std::format("{:b}", kilohertz(0)) == "0Hz");
+    REQUIRE(std::format("{:b.1f}", kilohertz(0)) == "0.0Hz");
+    REQUIRE(std::format("{:b}", frequency<double, std::mega>(2.5)) == "2500000Hz");
+    REQUIRE(std::format("{:b.1f}", frequency<int64_t, std::deci>(225)) == "22.5Hz");
+    REQUIRE(std::format("{:b}", frequency<int64_t, std::deci>(225)) == "22.5Hz");
+
+    // Width, fill and alignment follow the marker.
+    REQUIRE(std::format("{:b8.1f}", millihertz(1500)) == "     1.5Hz");
+    REQUIRE(std::format("{:b*>8.1f}", millihertz(1500)) == "*****1.5Hz");
+}
+
+TEST_CASE("std::format s marker scales the SI prefix", "[frequency][string]") {
+    REQUIRE(std::format("{:s}", megahertz(2400)) == "2.4GHz");
+    REQUIRE(std::format("{:s}", millihertz(1500)) == "1.5Hz");
+    REQUIRE(std::format("{:s.1f}", millihertz(33)) == "33.0mHz");
+    REQUIRE(std::format("{:s.2f}", hertz(1500)) == "1.50kHz");
+    REQUIRE(std::format("{:s}", hertz(999)) == "999Hz");
+    REQUIRE(std::format("{:s}", hertz(1000)) == "1kHz");
+    REQUIRE(std::format("{:s}", terahertz(5000)) == "5000THz");
+    REQUIRE(std::format("{:s}", hertz(-2500)) == "-2.5kHz");
+    REQUIRE(std::format("{:s.1f}", megahertz(-2400)) == "-2.4GHz");
+    REQUIRE(std::format("{:s}", hertz(0)) == "0Hz");
+    REQUIRE(std::format("{:s.1f}", gigahertz(0)) == "0.0Hz");
+    REQUIRE(std::format("{:s}", frequency<double, std::femto>(0.5)) == "0.5fHz");
+    REQUIRE(std::format("{:s}", frequency<int64_t, std::deci>(5)) == "500mHz");
+    REQUIRE(std::format("{:s.1f}", frequency<int64_t, std::deci>(225)) == "22.5Hz");
+
+    // Width, fill and alignment follow the marker.
+    REQUIRE(std::format("{:s6.1f}", megahertz(2400)) == "   2.4GHz");
+    REQUIRE(std::format("{:s*<8.2f}", hertz(1500)) == "1.50****kHz");
+}
+
+TEST_CASE("std::format and to_string agree with no spec", "[frequency][string]") {
+    const auto check = [](const auto& f) {
+        REQUIRE(std::format("{}", f) == to_string(f));
+        REQUIRE(std::format("{:b}", f) == to_string(f, base_unit));
+        REQUIRE(std::format("{:s}", f) == to_string(f, scaled));
+    };
+    check(millihertz(1500));
+    check(millihertz(24));
+    check(hertz(-2500));
+    check(hertz(0));
+    check(kilohertz(433));
+    check(megahertz(2400));
+    check(terahertz(5));
+    check(frequency<double>(440.5));
+    check(frequency<double>(1e6));
+    check(frequency<double>(0.00001));
+    check(frequency<double>(-0.0));
+    check(frequency<double, std::kilo>(2.5));
+    check(frequency<double, std::micro>(1e-3));
+    check(frequency<float>(0.1f));
+
+    using decihertz = frequency<int64_t, std::deci>;
+    REQUIRE(std::format("{:b}", decihertz(225)) == to_string(decihertz(225), base_unit));
+    REQUIRE(std::format("{:s}", decihertz(225)) == to_string(decihertz(225), scaled));
+}
+#endif
+
+TEST_CASE("frequency period", "[frequency][period]") {
+    using namespace std::chrono;
+
+    // 1 Hz = 1 second period
+    auto p1 = hertz(1).period<seconds>();
+    REQUIRE(p1.count() == 1);
+    REQUIRE(p1 == seconds(1));
+
+    // 1000 Hz = 1 millisecond period
+    auto p2 = hertz(1000).period<duration<double, std::milli>>();
+    REQUIRE(p2.count() == 1.0);
+    REQUIRE(duration_cast<milliseconds>(p2) == milliseconds(1));
+
+    // 1 kHz = 1 millisecond period
+    auto p3 = kilohertz(1).period<milliseconds>();
+    REQUIRE(p3 == milliseconds(1));
+
+    // 1 MHz = 1 microsecond period
+    auto p4 = megahertz(1).period<microseconds>();
+    REQUIRE(p4 == microseconds(1));
+
+    // 1 GHz = 1 nanosecond period
+    auto p5 = gigahertz(1).period<nanoseconds>();
+    REQUIRE(p5 == nanoseconds(1));
+
+    // Test with different return types
+    auto p6 = hertz(10).period<milliseconds>();
+    REQUIRE(p6 == milliseconds(100));
+
+    // Zero frequency should return max duration
+    auto p7 = hertz(0).period<duration<double>>();
+    REQUIRE(p7 == duration<double>::max());
+}
+
+TEST_CASE("frequency period precision", "[frequency][period]") {
+    using namespace std::chrono;
+
+    // 2500 Hz = 0.4 ms = 400 microseconds
+    auto p1 = hertz(2500).period<microseconds>();
+    REQUIRE(p1 == microseconds(400));
+
+    // 250 kHz = 4 microseconds
+    auto p2 = kilohertz(250).period<microseconds>();
+    REQUIRE(p2 == microseconds(4));
+
+    // 2 GHz = 0.5 nanoseconds
+    auto p3 = gigahertz(2).period<nanoseconds>();
+    REQUIRE(p3 == nanoseconds(0)); // truncates to 0
+
+    // But as double it should be correct
+    auto p4 = gigahertz(2).period<duration<double, std::nano>>();
+    REQUIRE(p4.count() == Catch::Approx(0.5).epsilon(0.01));
+}
+
+TEST_CASE("frequency period integer arithmetic", "[frequency][period][integer]") {
+    using namespace std::chrono;
+
+    // Test exact integer-to-integer period conversions
+    // These should all be exact with the optimized integer path
+
+    // Common exact conversions
+    REQUIRE(hertz(1).period<seconds>() == seconds(1));
+    REQUIRE(hertz(1000).period<milliseconds>() == milliseconds(1));
+    REQUIRE(kilohertz(1).period<milliseconds>() == milliseconds(1));
+    REQUIRE(hertz(100).period<microseconds>() == microseconds(10000));
+    REQUIRE(kilohertz(100).period<microseconds>() == microseconds(10));
+    REQUIRE(megahertz(1).period<microseconds>() == microseconds(1));
+    REQUIRE(megahertz(100).period<nanoseconds>() == nanoseconds(10));
+    REQUIRE(gigahertz(1).period<nanoseconds>() == nanoseconds(1));
+
+    // Less common but still exact
+    REQUIRE(hertz(500).period<milliseconds>() == milliseconds(2));
+    REQUIRE(hertz(250).period<milliseconds>() == milliseconds(4));
+    REQUIRE(hertz(125).period<milliseconds>() == milliseconds(8));
+    REQUIRE(kilohertz(500).period<microseconds>() == microseconds(2));
+    REQUIRE(kilohertz(250).period<microseconds>() == microseconds(4));
+
+    // Verify these work with larger values (testing overflow protection)
+    REQUIRE(hertz(1000000).period<microseconds>() == microseconds(1));
+    REQUIRE(kilohertz(1000).period<microseconds>() == microseconds(1));
+}
+
+TEST_CASE("frequency period of unsigned counts beyond intmax_t", "[frequency][period][integer]") {
+    // Two unsigned reps compute unsigned: a count above INTMAX_MAX has a
+    // period of 0 whole seconds, with or without a 128-bit intermediate.
+    using hertz_u64 = frequency<uint64_t>;
+    using seconds_u8 = std::chrono::duration<uint8_t>;
+    REQUIRE(hertz_u64(18'446'744'073'709'551'615U).period<seconds_u8>().count() == 0);
+    REQUIRE(hertz_u64(9'223'372'036'854'775'808U).period<std::chrono::duration<uint64_t, std::nano>>().count() == 0);
+}
+
+TEST_CASE("frequency period floating point", "[frequency][period][floating]") {
+    using namespace std::chrono;
+    using hertz_d = frequency<double>;
+    using kilohertz_d = frequency<double, std::kilo>;
+
+    // Floating-point frequency types should work correctly
+    auto p1 = hertz_d{440.0}.period<duration<double, std::milli>>();
+    REQUIRE(p1.count() == Catch::Approx(2.272727).epsilon(0.0001));
+
+    auto p2 = hertz_d{1000.5}.period<duration<double, std::milli>>();
+    REQUIRE(p2.count() == Catch::Approx(0.9995).epsilon(0.0001));
+
+    auto p3 = kilohertz_d{88.5}.period<duration<double, std::micro>>();
+    REQUIRE(p3.count() == Catch::Approx(11.2994).epsilon(0.001));
+
+    // Mixed: integer frequency, floating-point duration
+    auto p4 = hertz(440).period<duration<double, std::milli>>();
+    REQUIRE(p4.count() == Catch::Approx(2.272727).epsilon(0.0001));
+}
+
+TEST_CASE("frequency period with literals", "[frequency][period][literals]") {
+    using namespace std::chrono;
+
+    auto p1 = (1000_Hz).period<milliseconds>();
+    REQUIRE(p1 == milliseconds(1));
+
+    auto p2 = (1_kHz).period<milliseconds>();
+    REQUIRE(p2 == milliseconds(1));
+
+    auto p3 = (1_MHz).period<microseconds>();
+    REQUIRE(p3 == microseconds(1));
+}
+
+TEST_CASE("frequency wavelength", "[frequency][wavelength]") {
+    using namespace std::chrono;
+
+    // Using a simple model: if time_per_meter = 1 nanosecond,
+    // then velocity = 1 meter/nanosecond = 1,000,000,000 m/s
+
+    // 1 GHz with 1 ns/meter -> wavelength = 1 meter
+    // period = 1 ns, wavelength = 1 ns / (1 ns/m) = 1 m
+    using meters = test_distance<int64_t>;
+    auto w1 = gigahertz(1).wavelength<meters>(nanoseconds(1));
+    REQUIRE(w1.count() == 1);
+
+    // 500 MHz with 1 ns/meter -> wavelength = 2 meters
+    // period = 2 ns, wavelength = 2 ns / (1 ns/m) = 2 m
+    auto w2 = megahertz(500).wavelength<meters>(nanoseconds(1));
+    REQUIRE(w2.count() == 2);
+
+    // 2 GHz with 1 ns/meter -> wavelength = 0.5 meters
+    using meters_double = test_distance<double>;
+    auto w3 = gigahertz(2).wavelength<meters_double>(nanoseconds(1));
+    REQUIRE(w3.count() == Catch::Approx(0.5).epsilon(0.01));
+
+    // 1 kHz with 1 microsecond/meter -> wavelength = 1000 meters
+    // period = 1 ms = 1000 us, wavelength = 1000 us / (1 us/m) = 1000 m
+    auto w4 = kilohertz(1).wavelength<meters>(microseconds(1));
+    REQUIRE(w4.count() == 1000);
+
+    // Zero frequency should return max wavelength
+    auto w5 = hertz(0).wavelength<meters_double>(nanoseconds(1));
+    REQUIRE(w5 == meters_double::max());
+}
+
+TEST_CASE("frequency wavelength with electromagnetic waves", "[frequency][wavelength]") {
+    using namespace std::chrono;
+
+    // Speed of light: ~299,792,458 m/s
+    // Time per meter: 1/299792458 seconds ≈ 3.336 nanoseconds
+    using meters = test_distance<double>;
+    auto time_per_meter = duration<double, std::nano>(3.33564095);
+
+    // 1 Hz electromagnetic wave has wavelength of ~299,792,458 meters
+    auto w1 = hertz(1).wavelength<meters>(time_per_meter);
+    REQUIRE(w1.count() == Catch::Approx(299792458.0).epsilon(0.0001));
+
+    // 1 MHz electromagnetic wave has wavelength of ~299.79 meters
+    auto w2 = megahertz(1).wavelength<meters>(time_per_meter);
+    REQUIRE(w2.count() == Catch::Approx(299.792458).epsilon(0.0001));
+
+    // 2.4 GHz (WiFi) has wavelength of ~0.125 meters (12.5 cm)
+    auto w3 = megahertz(2400).wavelength<meters>(time_per_meter);
+    REQUIRE(w3.count() == Catch::Approx(0.1249).epsilon(0.01));
+
+    // 100 MHz (FM radio) has wavelength of ~3 meters
+    auto w4 = megahertz(100).wavelength<meters>(time_per_meter);
+    REQUIRE(w4.count() == Catch::Approx(2.998).epsilon(0.01));
+}
+
+TEST_CASE("frequency wavelength with velocity", "[frequency][wavelength]") {
+    using namespace std::chrono;
+
+    using meters = test_distance<double>;
+
+    // Default speed of light
+    // 1 MHz -> ~299.79 meters
+    auto w1 = megahertz(1).wavelength<meters>();
+    REQUIRE(w1.count() == Catch::Approx(299.792458).epsilon(0.0001));
+
+    // 2.4 GHz (WiFi) -> ~0.125 meters (12.5 cm)
+    using ghz_double = frequency<double, std::giga>;
+    auto w2 = ghz_double(2.4).wavelength<meters>();
+    REQUIRE(w2.count() == Catch::Approx(0.12491).epsilon(0.001));
+
+    // 100 MHz (FM radio) -> ~3 meters
+    auto w3 = megahertz(100).wavelength<meters>();
+    REQUIRE(w3.count() == Catch::Approx(2.998).epsilon(0.01));
+
+    // 5 GHz (WiFi 5) -> ~0.06 meters (6 cm)
+    auto w4 = gigahertz(5).wavelength<meters>();
+    REQUIRE(w4.count() == Catch::Approx(0.05996).epsilon(0.001));
+
+    // Custom velocity: sound in air at 20°C (~343 m/s)
+    // 440 Hz (A4 note) -> ~0.78 meters
+    auto w5 = hertz(440).wavelength<meters>(343.0);
+    REQUIRE(w5.count() == Catch::Approx(0.7795).epsilon(0.01));
+
+    // 1000 Hz sound -> ~0.343 meters
+    auto w6 = kilohertz(1).wavelength<meters>(343.0);
+    REQUIRE(w6.count() == Catch::Approx(0.343).epsilon(0.01));
+
+    // Zero frequency returns max
+    auto w7 = hertz(0).wavelength<meters>();
+    REQUIRE(w7 == meters::max());
+
+    // Integer distance at a finer precision: 2.4 GHz -> 124 mm (truncated)
+    using millimeters = test_distance<int64_t, std::milli>;
+    REQUIRE((2400_MHz).wavelength<millimeters>() == millimeters(124));
+}
+
+TEST_CASE("frequency harmonic operations", "[frequency][harmonics]") {
+    SECTION("harmonics") {
+        hertz fundamental(440); // A4 concert pitch
+
+        REQUIRE(fundamental.harmonic(1).count() == 440);
+        REQUIRE(fundamental.harmonic(2).count() == 880);  // 2nd harmonic (octave up)
+        REQUIRE(fundamental.harmonic(3).count() == 1320); // 3rd harmonic
+        REQUIRE(fundamental.harmonic(4).count() == 1760); // 4th harmonic (2 octaves up)
+        REQUIRE(fundamental.harmonic(5).count() == 2200); // 5th harmonic
+    }
+
+    SECTION("subharmonics") {
+        hertz freq(1000);
+
+        REQUIRE(freq.subharmonic(1).count() == 1000);
+        REQUIRE(freq.subharmonic(2).count() == 500);
+        REQUIRE(freq.subharmonic(4).count() == 250);
+        REQUIRE(freq.subharmonic(5).count() == 200);
+        REQUIRE(freq.subharmonic(10).count() == 100);
+    }
+
+    SECTION("harmonics with different precisions") {
+        kilohertz khz(1);
+        REQUIRE(khz.harmonic(3).count() == 3);
+        REQUIRE(khz.harmonic(10).count() == 10);
+
+        megahertz mhz(5);
+        REQUIRE(mhz.harmonic(2).count() == 10);
+        REQUIRE(mhz.harmonic(4).count() == 20);
+    }
+
+    SECTION("subharmonics with different precisions") {
+        kilohertz khz(10);
+        REQUIRE(khz.subharmonic(2).count() == 5);
+        REQUIRE(khz.subharmonic(5).count() == 2);
+
+        megahertz mhz(100);
+        REQUIRE(mhz.subharmonic(10).count() == 10);
+        REQUIRE(mhz.subharmonic(25).count() == 4);
+    }
+
+    SECTION("harmonic/subharmonic round trip") {
+        hertz base(100);
+        auto up = base.harmonic(5);    // 500 Hz
+        auto down = up.subharmonic(5); // 100 Hz
+        REQUIRE(down == base);
+    }
+
+    SECTION("harmonics with literals") {
+        REQUIRE((440_Hz).harmonic(2) == 880_Hz);
+        REQUIRE((1_kHz).harmonic(3) == 3_kHz);
+        REQUIRE((100_MHz).harmonic(10) == 1000_MHz);
+    }
+
+    SECTION("subharmonics with literals") {
+        REQUIRE((1000_Hz).subharmonic(2) == 500_Hz);
+        REQUIRE((10_kHz).subharmonic(5) == 2_kHz);
+        REQUIRE((100_MHz).subharmonic(4) == 25_MHz);
+    }
+}
+// =============================================================================
+// Octave and semitone operations tests
+// =============================================================================
+
+TEST_CASE("frequency octave operations", "[frequency][octaves]") {
+    SECTION("octave_shift up") {
+        hertz a4(440);
+
+        // One octave up doubles the frequency
+        auto a5 = a4.octave_shift(1.0);
+        REQUIRE(a5.count() == 880);
+
+        // Two octaves up quadruples the frequency
+        auto a6 = a4.octave_shift(2.0);
+        REQUIRE(a6.count() == 1760);
+
+        // Half octave up
+        auto between = a4.octave_shift(0.5);
+        REQUIRE(between.count() == 622); // sqrt(2) * 440 ≈ 622
+    }
+
+    SECTION("octave_shift down") {
+        hertz a4(440);
+
+        // One octave down halves the frequency
+        auto a3 = a4.octave_shift(-1.0);
+        REQUIRE(a3.count() == 220);
+
+        // Two octaves down
+        auto a2 = a4.octave_shift(-2.0);
+        REQUIRE(a2.count() == 110);
+    }
+
+    SECTION("octaves_from") {
+        hertz a3(220);
+        hertz a4(440);
+        hertz a5(880);
+
+        REQUIRE(a4.octaves_from(a3) == Catch::Approx(1.0));
+        REQUIRE(a5.octaves_from(a4) == Catch::Approx(1.0));
+        REQUIRE(a5.octaves_from(a3) == Catch::Approx(2.0));
+        REQUIRE(a3.octaves_from(a4) == Catch::Approx(-1.0));
+    }
+
+    SECTION("octave round trip") {
+        hertz base(440);
+        auto up = base.octave_shift(2.5);
+        auto back = up.octave_shift(-2.5);
+        REQUIRE(back.count() == 440);
+    }
+}
+
+TEST_CASE("frequency semitone operations", "[frequency][semitones]") {
+    SECTION("semitone_shift up") {
+        hertz a4(440);
+
+        // 12 semitones = 1 octave
+        auto octave_up = a4.semitone_shift(12);
+        REQUIRE(octave_up.count() == 880);
+
+        // 1 semitone (minor second)
+        auto a_sharp = a4.semitone_shift(1);
+        REQUIRE(a_sharp.count() == 466); // 440 * 2^(1/12) ≈ 466
+
+        // 7 semitones (perfect fifth)
+        auto e5 = a4.semitone_shift(7);
+        REQUIRE(e5.count() == 659); // 440 * 2^(7/12) ≈ 659
+    }
+
+    SECTION("semitone_shift down") {
+        hertz a4(440);
+
+        // 12 semitones down = 1 octave down
+        auto octave_down = a4.semitone_shift(-12);
+        REQUIRE(octave_down.count() == 220);
+
+        // 1 semitone down
+        auto g_sharp = a4.semitone_shift(-1);
+        REQUIRE(g_sharp.count() == 415); // 440 / 2^(1/12) ≈ 415
+    }
+
+    SECTION("semitones_from") {
+        hertz a4(440);
+        hertz a5(880);
+
+        // One octave = 12 semitones
+        REQUIRE(a5.semitones_from(a4) == Catch::Approx(12.0));
+        REQUIRE(a4.semitones_from(a5) == Catch::Approx(-12.0));
+
+        // Perfect fifth ≈ 7 semitones (if we had exact frequency)
+        hertz perfect_fifth(659);
+        REQUIRE(perfect_fifth.semitones_from(a4) == Catch::Approx(7.0).epsilon(0.01));
+    }
+
+    SECTION("semitone round trip") {
+        hertz base(440);
+        auto up = base.semitone_shift(7);
+        auto back = up.semitone_shift(-7);
+        REQUIRE(back.count() == 440);
+    }
+
+    SECTION("octave and semitone equivalence") {
+        hertz base(440);
+
+        auto octave_method = base.octave_shift(1.0);
+        auto semitone_method = base.semitone_shift(12);
+
+        REQUIRE(octave_method.count() == semitone_method.count());
+    }
+}
+
+TEST_CASE("frequency musical intervals", "[frequency][music]") {
+    SECTION("equal temperament tuning") {
+        hertz a4(440); // Standard concert pitch
+
+        // Major scale intervals from A
+        auto b = a4.semitone_shift(2);        // Major second
+        auto c_sharp = a4.semitone_shift(4);  // Major third
+        auto d = a4.semitone_shift(5);        // Perfect fourth
+        auto e = a4.semitone_shift(7);        // Perfect fifth
+        auto f_sharp = a4.semitone_shift(9);  // Major sixth
+        auto g_sharp = a4.semitone_shift(11); // Major seventh
+        auto a5 = a4.semitone_shift(12);      // Octave
+
+        REQUIRE(b.count() == 494);
+        REQUIRE(c_sharp.count() == 554);
+        REQUIRE(d.count() == 587);
+        REQUIRE(e.count() == 659);
+        REQUIRE(f_sharp.count() == 740);
+        REQUIRE(g_sharp.count() == 831);
+        REQUIRE(a5.count() == 880);
+    }
+}
+
+// =============================================================================
+// Floating-point frequency tests
+// =============================================================================
+
+TEST_CASE("floating-point frequency construction", "[frequency][floating-point]") {
+    using hertz_d = frequency<double, std::ratio<1>>;
+    using kilohertz_d = frequency<double, std::kilo>;
+
+    hertz_d f1{440.0};
+    REQUIRE(f1.count() == 440.0);
+
+    hertz_d f2{440.5};
+    REQUIRE(f2.count() == 440.5);
+
+    kilohertz_d f3{88.5};
+    REQUIRE(f3.count() == 88.5);
+}
+
+TEST_CASE("floating-point frequency arithmetic", "[frequency][floating-point]") {
+    using hertz_d = frequency<double, std::ratio<1>>;
+
+    hertz_d f1{440.5};
+    hertz_d f2{100.25};
+
+    auto sum = f1 + f2;
+    REQUIRE(sum.count() == Catch::Approx(540.75));
+
+    auto diff = f1 - f2;
+    REQUIRE(diff.count() == Catch::Approx(340.25));
+
+    auto doubled = f1 * 2.0;
+    REQUIRE(doubled.count() == Catch::Approx(881.0));
+
+    auto divided = f1 / 2.0;
+    REQUIRE(divided.count() == Catch::Approx(220.25));
+}
+
+TEST_CASE("floating-point frequency conversions", "[frequency][floating-point]") {
+    using hertz_d = frequency<double, std::ratio<1>>;
+    using kilohertz_d = frequency<double, std::kilo>;
+
+    // Implicit lossless conversion (coarser to finer)
+    kilohertz_d khz{1.5};
+    hertz_d hz = khz;
+    REQUIRE(hz.count() == Catch::Approx(1500.0));
+
+    // Explicit lossy conversion (finer to coarser)
+    hertz_d hz2{2750.5};
+    kilohertz_d khz2 = frequency_cast<kilohertz_d>(hz2);
+    REQUIRE(khz2.count() == Catch::Approx(2.7505));
+
+    // Integer to floating-point conversion
+    hertz int_freq{440};
+    hertz_d float_freq{int_freq};
+    REQUIRE(float_freq.count() == Catch::Approx(440.0));
+}
+
+TEST_CASE("floating-point frequency musical operations", "[frequency][floating-point][music]") {
+    using hertz_d = frequency<double, std::ratio<1>>;
+
+    SECTION("concert pitch and intervals") {
+        hertz_d a4{440.0};
+
+        // Perfect fifth (7 semitones) - should be exactly 1.5x in just intonation,
+        // but equal temperament gives 2^(7/12)
+        auto e5 = a4.semitone_shift(7.0);
+        REQUIRE(e5.count() == Catch::Approx(659.255).epsilon(0.001));
+
+        // Major third (4 semitones)
+        auto c_sharp = a4.semitone_shift(4.0);
+        REQUIRE(c_sharp.count() == Catch::Approx(554.365).epsilon(0.001));
+    }
+
+    SECTION("octave operations with fractional octaves") {
+        hertz_d a4{440.0};
+
+        // Half octave (tritone/augmented fourth)
+        auto tritone = a4.octave_shift(0.5);
+        REQUIRE(tritone.count() == Catch::Approx(622.254).epsilon(0.001));
+
+        // Quarter octave
+        auto quarter = a4.octave_shift(0.25);
+        REQUIRE(quarter.count() == Catch::Approx(523.251).epsilon(0.001));
+
+        // 1.5 octaves
+        auto up_1_5 = a4.octave_shift(1.5);
+        REQUIRE(up_1_5.count() == Catch::Approx(1244.508).epsilon(0.001));
+    }
+
+    SECTION("precise frequency ratios") {
+        hertz_d fundamental{100.0};
+
+        // Harmonic series with floating-point allows exact ratios
+        auto second_harmonic = fundamental * 2.0;
+        auto third_harmonic = fundamental * 3.0;
+        auto fifth_harmonic = fundamental * 5.0;
+
+        REQUIRE(second_harmonic.count() == Catch::Approx(200.0));
+        REQUIRE(third_harmonic.count() == Catch::Approx(300.0));
+        REQUIRE(fifth_harmonic.count() == Catch::Approx(500.0));
+
+        // Just intonation intervals (exact frequency ratios)
+        auto perfect_fifth = fundamental * 1.5; // 3:2 ratio
+        auto major_third = fundamental * 1.25;  // 5:4 ratio
+
+        REQUIRE(perfect_fifth.count() == Catch::Approx(150.0));
+        REQUIRE(major_third.count() == Catch::Approx(125.0));
+    }
+}
+
+TEST_CASE("floating-point frequency comparisons", "[frequency][floating-point]") {
+    using hertz_d = frequency<double, std::ratio<1>>;
+
+    hertz_d f1{440.0};
+    hertz_d f2{440.0};
+    hertz_d f3{440.5};
+
+    REQUIRE(f1 == f2);
+    REQUIRE(f1 != f3);
+    REQUIRE(f1 < f3);
+    REQUIRE(f3 > f1);
+    REQUIRE(f1 <= f2);
+    REQUIRE(f3 >= f1);
+}
+
+TEST_CASE("mixed integer and floating-point operations", "[frequency][floating-point]") {
+    using hertz_d = frequency<double, std::ratio<1>>;
+
+    hertz int_freq{440};
+    hertz_d float_freq{440.0};
+
+    // Comparison across types
+    REQUIRE(hertz_d(int_freq) == float_freq);
+
+    // Arithmetic with conversion
+    hertz_d result = hertz_d(int_freq) * 1.5;
+    REQUIRE(result.count() == Catch::Approx(660.0));
+}
+
+// =============================================================================
+// Rounding function tests
+// =============================================================================
+
+TEST_CASE("frequency floor", "[frequency][rounding]") {
+    SECTION("Hz to kHz") {
+        REQUIRE(floor<kilohertz>(hertz(1500)).count() == 1);
+        REQUIRE(floor<kilohertz>(hertz(1999)).count() == 1);
+        REQUIRE(floor<kilohertz>(hertz(2000)).count() == 2);
+        REQUIRE(floor<kilohertz>(hertz(500)).count() == 0);
+    }
+
+    SECTION("mHz to Hz") {
+        REQUIRE(floor<hertz>(millihertz(1500)).count() == 1);
+        REQUIRE(floor<hertz>(millihertz(999)).count() == 0);
+        REQUIRE(floor<hertz>(millihertz(1000)).count() == 1);
+    }
+
+    SECTION("negative values") {
+        REQUIRE(floor<kilohertz>(hertz(-1500)).count() == -2);
+        REQUIRE(floor<kilohertz>(hertz(-1000)).count() == -1);
+        REQUIRE(floor<kilohertz>(hertz(-999)).count() == -1);
+    }
+
+    SECTION("exact conversions") {
+        REQUIRE(floor<kilohertz>(hertz(1000)) == kilohertz(1));
+        REQUIRE(floor<kilohertz>(hertz(5000)) == kilohertz(5));
+        REQUIRE(floor<hertz>(millihertz(3000)) == hertz(3));
+    }
+
+    SECTION("with literals") {
+        REQUIRE(floor<kilohertz>(1500_Hz).count() == 1);
+        REQUIRE(floor<hertz>(1500_mHz).count() == 1);
+    }
+}
+
+TEST_CASE("frequency ceil", "[frequency][rounding]") {
+    SECTION("Hz to kHz") {
+        REQUIRE(ceil<kilohertz>(hertz(1500)).count() == 2);
+        REQUIRE(ceil<kilohertz>(hertz(1001)).count() == 2);
+        REQUIRE(ceil<kilohertz>(hertz(1000)).count() == 1);
+        REQUIRE(ceil<kilohertz>(hertz(500)).count() == 1);
+    }
+
+    SECTION("mHz to Hz") {
+        REQUIRE(ceil<hertz>(millihertz(1500)).count() == 2);
+        REQUIRE(ceil<hertz>(millihertz(1001)).count() == 2);
+        REQUIRE(ceil<hertz>(millihertz(1000)).count() == 1);
+    }
+
+    SECTION("negative values") {
+        REQUIRE(ceil<kilohertz>(hertz(-1500)).count() == -1);
+        REQUIRE(ceil<kilohertz>(hertz(-1000)).count() == -1);
+        REQUIRE(ceil<kilohertz>(hertz(-1001)).count() == -1);
+    }
+
+    SECTION("exact conversions") {
+        REQUIRE(ceil<kilohertz>(hertz(1000)) == kilohertz(1));
+        REQUIRE(ceil<kilohertz>(hertz(5000)) == kilohertz(5));
+        REQUIRE(ceil<hertz>(millihertz(3000)) == hertz(3));
+    }
+
+    SECTION("with literals") {
+        REQUIRE(ceil<kilohertz>(1500_Hz).count() == 2);
+        REQUIRE(ceil<hertz>(1001_mHz).count() == 2);
+    }
+}
+
+TEST_CASE("frequency round", "[frequency][rounding]") {
+    SECTION("Hz to kHz - basic rounding") {
+        REQUIRE(round<kilohertz>(hertz(1499)).count() == 1);
+        REQUIRE(round<kilohertz>(hertz(1501)).count() == 2);
+        REQUIRE(round<kilohertz>(hertz(1000)).count() == 1);
+        REQUIRE(round<kilohertz>(hertz(2000)).count() == 2);
+    }
+
+    SECTION("Hz to kHz - ties to even") {
+        // 1500 Hz is exactly 1.5 kHz, should round to 2 (even)
+        REQUIRE(round<kilohertz>(hertz(1500)).count() == 2);
+        // 2500 Hz is exactly 2.5 kHz, should round to 2 (even)
+        REQUIRE(round<kilohertz>(hertz(2500)).count() == 2);
+        // 3500 Hz is exactly 3.5 kHz, should round to 4 (even)
+        REQUIRE(round<kilohertz>(hertz(3500)).count() == 4);
+        // 4500 Hz is exactly 4.5 kHz, should round to 4 (even)
+        REQUIRE(round<kilohertz>(hertz(4500)).count() == 4);
+    }
+
+    SECTION("mHz to Hz") {
+        REQUIRE(round<hertz>(millihertz(1499)).count() == 1);
+        REQUIRE(round<hertz>(millihertz(1501)).count() == 2);
+        REQUIRE(round<hertz>(millihertz(1500)).count() == 2); // ties to even
+        REQUIRE(round<hertz>(millihertz(2500)).count() == 2); // ties to even
+    }
+
+    SECTION("negative values") {
+        REQUIRE(round<kilohertz>(hertz(-1499)).count() == -1);
+        REQUIRE(round<kilohertz>(hertz(-1501)).count() == -2);
+        REQUIRE(round<kilohertz>(hertz(-1500)).count() == -2); // ties to even
+        REQUIRE(round<kilohertz>(hertz(-2500)).count() == -2); // ties to even
+    }
+
+    SECTION("exact conversions") {
+        REQUIRE(round<kilohertz>(hertz(1000)) == kilohertz(1));
+        REQUIRE(round<kilohertz>(hertz(5000)) == kilohertz(5));
+    }
+
+    SECTION("with literals") {
+        REQUIRE(round<kilohertz>(1499_Hz).count() == 1);
+        REQUIRE(round<kilohertz>(1501_Hz).count() == 2);
+        REQUIRE(round<kilohertz>(1500_Hz).count() == 2);
+    }
+}
+
+TEST_CASE("frequency abs", "[frequency][rounding]") {
+    SECTION("positive values") {
+        REQUIRE(abs(hertz(100)).count() == 100);
+        REQUIRE(abs(hertz(440)).count() == 440);
+        REQUIRE(abs(kilohertz(5)).count() == 5);
+    }
+
+    SECTION("negative values") {
+        REQUIRE(abs(hertz(-100)).count() == 100);
+        REQUIRE(abs(hertz(-440)).count() == 440);
+        REQUIRE(abs(kilohertz(-5)).count() == 5);
+    }
+
+    SECTION("zero") {
+        REQUIRE(abs(hertz(0)).count() == 0);
+        REQUIRE(abs(hertz::zero()).count() == 0);
+    }
+
+    SECTION("with different precisions") {
+        REQUIRE(abs(millihertz(-1500)).count() == 1500);
+        REQUIRE(abs(megahertz(-100)).count() == 100);
+        REQUIRE(abs(gigahertz(-2)).count() == 2);
+    }
+
+    SECTION("with literals") {
+        REQUIRE(abs(-440_Hz).count() == 440);
+        REQUIRE(abs(-88_MHz).count() == 88);
+    }
+
+    SECTION("preserves type") {
+        hertz h = abs(hertz(-100));
+        kilohertz k = abs(kilohertz(-5));
+        REQUIRE(h.count() == 100);
+        REQUIRE(k.count() == 5);
+    }
+}
+
+TEST_CASE("beat calculations", "[frequency][interference]") {
+    SECTION("same precision - integer") {
+        REQUIRE(beat(1000_Hz, 600_Hz) == 400_Hz);
+        REQUIRE(beat(600_Hz, 1000_Hz) == 400_Hz); // commutative
+    }
+
+    SECTION("same frequency yields zero beat") {
+        REQUIRE(beat(440_Hz, 440_Hz).count() == 0);
+        REQUIRE(beat(1_kHz, 1_kHz).count() == 0);
+    }
+
+    SECTION("mixed precisions") {
+        REQUIRE(beat(2_kHz, 500_Hz) == 1500_Hz);
+        REQUIRE(beat(1000_Hz, 1_kHz).count() == 0);
+        REQUIRE(beat(1_MHz, 500_kHz) == 500_kHz);
+    }
+
+    SECTION("negative frequencies") {
+        REQUIRE(beat(hertz(-100), hertz(50)) == 150_Hz);
+        REQUIRE(beat(hertz(100), hertz(-50)) == 150_Hz);
+        REQUIRE(beat(hertz(-100), hertz(-50)) == 50_Hz);
+    }
+
+    SECTION("floating-point precision") {
+        using hertz_d = frequency<double, std::ratio<1>>;
+        auto b = beat(hertz_d{440.5}, hertz_d{438.2});
+        REQUIRE(b.count() == Catch::Approx(2.3).epsilon(0.0001));
+    }
+
+    SECTION("with literals") {
+        REQUIRE(beat(440_Hz, 442_Hz) == 2_Hz);
+        REQUIRE(beat(1_kHz, 900_Hz) == 100_Hz);
+    }
+
+    SECTION("constexpr compatibility") {
+        constexpr auto b = beat(100_Hz, 40_Hz);
+        static_assert(b == 60_Hz);
+    }
+}
+
+TEST_CASE("frequency rounding with floating-point", "[frequency][rounding][floating-point]") {
+    using hertz_d = frequency<double, std::ratio<1>>;
+    using kilohertz_d = frequency<double, std::kilo>;
+
+    SECTION("floor with floating-point") {
+        hertz_d h{1500.7};
+        auto k = floor<kilohertz_d>(h);
+        REQUIRE(k.count() == Catch::Approx(1.5007));
+    }
+
+    SECTION("ceil with floating-point") {
+        hertz_d h{1500.3};
+        auto k = ceil<kilohertz_d>(h);
+        REQUIRE(k.count() == Catch::Approx(1.5003));
+    }
+
+    SECTION("round with floating-point") {
+        hertz_d h{1500.5};
+        auto k = round<kilohertz_d>(h);
+        REQUIRE(k.count() == Catch::Approx(1.5005));
+    }
+
+    SECTION("abs with floating-point") {
+        hertz_d h{-440.5};
+        auto abs_h = abs(h);
+        REQUIRE(abs_h.count() == Catch::Approx(440.5));
+    }
+}
+
+TEST_CASE("frequency rounding edge cases", "[frequency][rounding]") {
+    SECTION("floor with larger precision gaps") {
+        REQUIRE(floor<megahertz>(hertz(1500000)).count() == 1);
+        REQUIRE(floor<megahertz>(hertz(1999999)).count() == 1);
+        REQUIRE(floor<megahertz>(hertz(2000000)).count() == 2);
+    }
+
+    SECTION("ceil with larger precision gaps") {
+        REQUIRE(ceil<megahertz>(hertz(1000001)).count() == 2);
+        REQUIRE(ceil<megahertz>(hertz(1000000)).count() == 1);
+    }
+
+    SECTION("round with larger precision gaps") {
+        REQUIRE(round<megahertz>(hertz(1499999)).count() == 1);
+        REQUIRE(round<megahertz>(hertz(1500000)).count() == 2); // ties to even
+        REQUIRE(round<megahertz>(hertz(1500001)).count() == 2);
+        REQUIRE(round<megahertz>(hertz(2500000)).count() == 2); // ties to even
+    }
+
+    SECTION("abs with min/max values") {
+        // Test near boundaries (not exactly min/max to avoid overflow)
+        hertz large_pos{1000000000};
+        hertz large_neg{-1000000000};
+        REQUIRE(abs(large_pos).count() == 1000000000);
+        REQUIRE(abs(large_neg).count() == 1000000000);
+    }
+}
+
+// =============================================================================
+// Result types (pinned: they depend on the exact std::ratio spelling)
+// =============================================================================
+
+namespace pin {
+using U = frequency<int, std::ratio<10, 20>>;
+static_assert(std::is_same_v<decltype(+U(1)), frequency<int, std::ratio<1, 2>>>);
+static_assert(std::is_same_v<decltype(-U(1)), frequency<int, std::ratio<1, 2>>>);
+static_assert(std::is_same_v<decltype(U(1) * 2L), frequency<long, std::ratio<10, 20>>>);
+static_assert(std::is_same_v<decltype(2L * U(1)), frequency<long, std::ratio<10, 20>>>);
+static_assert(std::is_same_v<decltype(U(1) / 2L), frequency<long, std::ratio<10, 20>>>);
+static_assert(std::is_same_v<decltype(U(1) % 2L), frequency<long, std::ratio<10, 20>>>);
+static_assert(std::is_same_v<decltype(U(1) / U(1)), int>);
+static_assert(std::is_same_v<std::common_type_t<U, U>, frequency<int, std::ratio<1, 2>>>);
+static_assert(std::is_same_v<decltype(U(1) + U(1)), frequency<int, std::ratio<1, 2>>>);
+static_assert(std::is_same_v<decltype(U(1) - U(1)), frequency<int, std::ratio<1, 2>>>);
+static_assert(std::is_same_v<decltype(U(1) % U(1)), frequency<int, std::ratio<1, 2>>>);
+static_assert(
+    std::is_same_v<std::common_type_t<U, frequency<long, std::ratio<1, 3>>>, frequency<long, std::ratio<1, 6>>>
+);
+static_assert(std::is_same_v<
+              std::common_type_t<frequency<int, std::milli>, frequency<long long, std::ratio<1>>>,
+              frequency<long long, std::ratio<1, 1000>>>);
+static_assert(std::is_same_v<decltype(abs(U(1))), U>);
+static_assert(std::is_same_v<decltype(U::zero()), U>);
+static_assert(std::is_same_v<decltype(U::min()), U>);
+static_assert(std::is_same_v<decltype(++std::declval<U&>()), U&>);
+static_assert(std::is_same_v<decltype(std::declval<U&>()++), U>);
+static_assert(std::is_same_v<decltype(std::declval<U&>() += U(1)), U&>);
+static_assert(std::is_same_v<decltype(std::declval<U&>() *= 2), U&>);
+static_assert(std::is_same_v<decltype(std::declval<U&>() %= 2), U&>);
+static_assert(std::is_same_v<decltype(std::declval<U&>() %= U(1)), U&>);
+static_assert(sizeof(hertz) == sizeof(int64_t));
+static_assert(std::is_trivially_copyable_v<hertz>);
+} // namespace pin
+
+// Every conversion between two specializations is either implicit (lossless)
+// or explicit (lossy), never ill-formed
+static_assert(std::is_constructible_v<hertz, frequency<double>>);
+static_assert(!std::is_convertible_v<frequency<double>, hertz>);
+static_assert(std::is_constructible_v<hertz, frequency<double, std::kilo>>);
+static_assert(!std::is_convertible_v<frequency<double, std::kilo>, hertz>);
+static_assert(std::is_constructible_v<kilohertz, hertz>);
+static_assert(!std::is_convertible_v<hertz, kilohertz>);
+static_assert(std::is_convertible_v<hertz, frequency<double>>);
+
+TEST_CASE("explicit conversion covers every lossy case", "[frequency][conversion]") {
+    // Floating-point rep to integral rep, same precision: truncates
+    REQUIRE(hertz(frequency<double>(1.5)).count() == 1);
+    REQUIRE(hertz(frequency<double>(-1.5)).count() == -1);
+    // Floating-point rep to integral rep, finer precision: truncates
+    REQUIRE(hertz(frequency<double, std::kilo>(1.5)).count() == 1500);
+    REQUIRE(hertz(frequency<double, std::kilo>(0.0015)).count() == 1);
+    // Integral rep to a coarser precision: truncates
+    REQUIRE(kilohertz(hertz(1500)).count() == 1);
+    REQUIRE(kilohertz(hertz(-1500)).count() == -1);
+    REQUIRE(kilohertz(frequency<double>(1999.0)).count() == 1);
+    REQUIRE(hertz(frequency<double, std::milli>(1500.0)).count() == 1);
+}
+
+TEST_CASE("abs of an unreduced precision", "[frequency]") {
+    // A precision not in lowest terms (unary minus gives the reduced one)
+    using QI = frequency<int64_t, std::ratio<4, 6>>;
+    using QD = frequency<double, std::ratio<4, 6>>;
+    STATIC_REQUIRE(std::is_same_v<decltype(abs(QI(-3))), QI>);
+    REQUIRE(abs(QI(-3)).count() == 3);
+    REQUIRE(abs(QI(3)).count() == 3);
+    REQUIRE(abs(QD(-1.5)).count() == 1.5);
+    STATIC_REQUIRE(abs(QI(-7)) == QI(7));
+}
+
+TEST_CASE("round with a narrow rep does not overflow", "[frequency][rounding]") {
+    using kilo8 = frequency<int8_t, std::kilo>;
+    REQUIRE(round<kilo8>(frequency<int8_t>(0)).count() == 0);
+    REQUIRE(round<kilo8>(frequency<int8_t>(100)).count() == 0);
+    REQUIRE(round<kilo8>(frequency<int8_t>(-100)).count() == 0);
+    REQUIRE(round<frequency<uint8_t, std::ratio<100>>>(frequency<uint8_t>(0)).count() == 0);
+}
+
+TEST_CASE("floor and ceil with a narrow rep compare exactly", "[frequency][rounding]") {
+    // 16384 thirds is 10922.67 halves. Compared in their common type, sixths
+    // of an int16_t, 16384 thirds overflowed.
+    using thirds16 = frequency<int16_t, std::ratio<1, 3>>;
+    using halves16 = frequency<int16_t, std::ratio<1, 2>>;
+    REQUIRE(floor<halves16>(thirds16(16384)).count() == 10922);
+    REQUIRE(ceil<halves16>(thirds16(16384)).count() == 10923);
+    REQUIRE(round<halves16>(thirds16(16384)).count() == 10923);
+    REQUIRE(floor<halves16>(thirds16(-16384)).count() == -10923);
+    REQUIRE(ceil<halves16>(thirds16(-16384)).count() == -10922);
+
+    using thirds8 = frequency<int8_t, std::ratio<1, 3>>;
+    using halves8 = frequency<int8_t, std::ratio<1, 2>>;
+    REQUIRE(round<halves8>(thirds8(64)).count() == 43);
+    STATIC_REQUIRE(round<halves8>(thirds8(64)).count() == 43);
+
+    // 254 thirds is 169.33 halves; as sixths it exceeds uint8_t
+    using thirds_u8 = frequency<uint8_t, std::ratio<1, 3>>;
+    using halves_u8 = frequency<uint8_t, std::ratio<1, 2>>;
+    REQUIRE(floor<halves_u8>(thirds_u8(254)).count() == 169);
+    REQUIRE(ceil<halves_u8>(thirds_u8(254)).count() == 170);
+    REQUIRE(round<halves_u8>(thirds_u8(254)).count() == 169);
+}
+
+// Precisions whose conversion factor overflows intmax_t do not convert, and
+// asking is not an error
+static_assert(!std::is_convertible_v<frequency<double, std::atto>, frequency<double, std::exa>>);
+static_assert(!std::is_constructible_v<frequency<double, std::atto>, frequency<double, std::exa>>);
+static_assert(!std::is_constructible_v<frequency<double, std::exa>, frequency<double, std::atto>>);
+static_assert(!std::is_convertible_v<frequency<int64_t, std::atto>, frequency<int64_t, std::exa>>);
+static_assert(!std::is_constructible_v<frequency<int64_t, std::exa>, frequency<int64_t, std::atto>>);
+static_assert(!std::is_constructible_v<frequency<int64_t, std::atto>, frequency<int64_t, std::exa>>);

@@ -1,0 +1,24 @@
+version: "0.1.0"
+description: "Type-safe units for temperature, frequency, electrical and spatial quantities, modeled after std::chrono"
+url: "https://github.com/cleishm/quanta-cpp"
+repository: "https://github.com/cleishm/quanta-cpp.git"
+license: "MIT"
+documentation: "https://cleishm.github.io/quanta-cpp/"
+issues: "https://github.com/cleishm/quanta-cpp/issues"
+tags:
+  - units
+  - chrono
+  - temperature
+  - frequency
+  - electrical
+  - spatial
+  - header-only
+dependencies:
+  idf: ">=5.1"
+files:
+  exclude:
+    - "tests/**/*"
+    - "docs/**/*"
+    - ".github/**/*"
+    - "build/**/*"
+    - "cmake-build-*/**/*"
