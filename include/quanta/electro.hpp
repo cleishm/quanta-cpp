@@ -262,7 +262,8 @@ public:
     /**
      * @brief Constructs from a tick count.
      *
-     * Implicit for inexact types, explicit otherwise to prevent accidental
+     * Explicit, as in std::chrono::duration. A floating-point (inexact) count
+     * is accepted only when rep is inexact too, to prevent accidental
      * precision loss.
      *
      * @tparam Rep2 The source representation type.
