@@ -4,7 +4,13 @@ All notable changes to **quanta** are documented in this file.
 
 The library follows [semantic versioning](https://semver.org/).
 
-## Unreleased
+## v0.2.0
+
+Adds `quanta::data`, a domain for data sizes and rates, and lets electro,
+spatial and data format precisions that have no unit symbol, as frequency
+already could. Existing code keeps its behaviour, but as a 0.x minor release
+it needs updated version constraints: ESP-IDF projects depending on `^0.1.0`
+need `^0.2.0`, and `find_package(quanta 0.1)` won't accept it.
 
 ### Additions
 

@@ -17,7 +17,7 @@ if(ESP_PLATFORM)
 endif()
 
 project(quanta
-    VERSION 0.1.0
+    VERSION 0.2.0
     DESCRIPTION "Type-safe units for temperature, frequency, electrical, spatial and data quantities, modeled after std::chrono"
     HOMEPAGE_URL "https://github.com/cleishm/quanta-cpp"
     LANGUAGES CXX

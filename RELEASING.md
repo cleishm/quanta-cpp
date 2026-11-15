@@ -1,11 +1,12 @@
 # Releasing
 
-1. **Prepare a release PR.** On a branch, bump the version in all three places
+1. **Prepare a release PR.** On a branch, bump the version in all four places
    that record it:
 
    - `CMakeLists.txt` (`project(quanta VERSION …)`)
    - `docs/Doxyfile` (`PROJECT_NUMBER`)
    - `idf_component.yml` (`version:`)
+   - `README.md` (the FetchContent `GIT_TAG` and the ESP-IDF dependency)
 
    Add a `## vX.Y.Z` section at the top of `CHANGELOG.md`, in the style of the
    existing ones: a lead paragraph, then `###` subsections of bullets. Versions
