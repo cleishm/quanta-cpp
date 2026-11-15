@@ -4,6 +4,14 @@ All notable changes to **quanta** are documented in this file.
 
 The library follows [semantic versioning](https://semver.org/).
 
+## Unreleased
+
+### Additions
+
+- `quanta::data` (`<quanta/data>`) — data sizes and rates in bits, SI bytes
+  (kB, MB, GB) and IEC bytes (KiB, MiB, GiB), as exact ratios of the byte, with
+  `std::chrono` interop (`size / duration = rate`)
+
 ## v0.1.0
 
 First release. quanta merges four libraries — thermo-cpp, frequency-cpp,

@@ -81,11 +81,11 @@
  *
  * Each domain lives in its own namespace: quanta::thermo (temperature),
  * quanta::frequency (frequency), quanta::electro (electrical units and
- * decibels) and quanta::spatial (length, area and volume). As with
- * std::chrono, the literals of every domain are available through `using
- * namespace quanta::literals;`, and each domain's through `using namespace
- * quanta::<domain>_literals;` (e.g. quanta::frequency_literals) or `using
- * namespace quanta::<domain>;`.
+ * decibels), quanta::spatial (length, area and volume) and quanta::data (data
+ * sizes and rates). As with std::chrono, the literals of every domain are
+ * available through `using namespace quanta::literals;`, and each domain's
+ * through `using namespace quanta::<domain>_literals;` (e.g.
+ * quanta::frequency_literals) or `using namespace quanta::<domain>;`.
  */
 namespace quanta {
 
@@ -842,10 +842,10 @@ constexpr _unit_form _parse_unit_marker(std::format_parse_context& ctx, const ch
 }
 
 // The std::formatter implementation shared by the quantities of thermo,
-// frequency, electro and spatial; see each domain's formatter specializations
-// for the spec grammar. With no marker, "{}" renders the exact count and any
-// other spec the count as a double, followed by the type's own unit; a marker
-// selects another unit. Traits describes the formatted type:
+// frequency, electro, spatial and data; see each domain's formatter
+// specializations for the spec grammar. With no marker, "{}" renders the exact
+// count and any other spec the count as a double, followed by the type's own
+// unit; a marker selects another unit. Traits describes the formatted type:
 // - markers: the marker letters accepted ("bs", or "pbs" with the power form)
 // - has_own_unit: whether the type has a unit label of its own. If not, "{}"
 //   is a format error, raised by no_own_unit_error() (which calls
