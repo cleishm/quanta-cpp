@@ -124,12 +124,6 @@ inline constexpr bool is_quantity_v = is_quantity<T>::value;
 template<typename Rep>
 concept not_quantity = !is_quantity_v<Rep>;
 
-template<typename T>
-struct _is_chrono_duration : std::false_type {};
-
-template<typename Rep, typename Period>
-struct _is_chrono_duration<std::chrono::duration<Rep, Period>> : std::true_type {};
-
 /**
  * @brief Concept for the time operands of charge and energy arithmetic.
  *
@@ -139,7 +133,7 @@ struct _is_chrono_duration<std::chrono::duration<Rep, Period>> : std::true_type 
  * e.g. a current times a length is not mistaken for a charge.
  */
 template<typename T>
-concept duration_like = _is_chrono_duration<std::remove_cvref_t<T>>::value;
+concept duration_like = _is_specialization_of_v<std::remove_cvref_t<T>, std::chrono::duration>;
 /** @endcond */
 
 /**
@@ -243,7 +237,7 @@ struct henry_unit {
  */
 template<typename Unit, typename Rep, typename Precision>
 class quantity {
-    static_assert(!is_quantity_v<Rep>, "rep cannot be an quanta::electro::quantity");
+    static_assert(!is_quantity_v<Rep>, "rep cannot be a quanta::electro::quantity");
     static_assert(_is_ratio<Precision>::value, "precision must be a specialization of std::ratio");
     static_assert(Precision::num > 0, "precision must be positive");
 

@@ -66,6 +66,9 @@ struct is_delta : std::false_type {};
 template<typename Rep, typename Precision>
 struct is_delta<delta<Rep, Precision>> : std::true_type {};
 
+template<typename _T>
+inline constexpr bool is_delta_v = is_delta<_T>::value;
+
 /** @cond INTERNAL */
 template<typename Rep>
 concept not_delta = !_is_specialization_of_v<Rep, delta>;
