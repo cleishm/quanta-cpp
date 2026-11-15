@@ -11,6 +11,7 @@ The library follows [semantic versioning](https://semver.org/).
 - `quanta::data` (`<quanta/data>`) — data sizes and rates in bits, SI bytes
   (kB, MB, GB, TB) and IEC bytes (KiB, MiB, GiB, TiB), as exact ratios of the
   byte, with `std::chrono` interop (`size / duration = rate`)
+- thermo: `is_delta_v`, alongside `is_delta`, as the other domains' traits have
 
 ### Changes
 

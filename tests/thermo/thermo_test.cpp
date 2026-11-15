@@ -13,6 +13,12 @@ using namespace quanta::thermo_literals;
 // =============================================================================
 
 // Compile-time tests
+// Traits
+static_assert(is_delta_v<delta_celsius>);
+static_assert(is_delta_v<delta<double, std::milli>>);
+static_assert(!is_delta_v<celsius>);
+static_assert(!is_delta_v<int>);
+
 static_assert(delta_celsius(10).count() == 10);
 static_assert(delta_celsius(5) + delta_celsius(3) == delta_celsius(8));
 static_assert(delta_celsius(5) - delta_celsius(3) == delta_celsius(2));

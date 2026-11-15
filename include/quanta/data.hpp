@@ -126,12 +126,6 @@ inline constexpr bool is_quantity_v = is_quantity<T>::value;
 template<typename Rep>
 concept not_quantity = !is_quantity_v<Rep>;
 
-template<typename T>
-struct _is_chrono_duration : std::false_type {};
-
-template<typename Rep, typename Period>
-struct _is_chrono_duration<std::chrono::duration<Rep, Period>> : std::true_type {};
-
 /**
  * @brief Concept for the time operands of data rate arithmetic.
  *
@@ -141,7 +135,7 @@ struct _is_chrono_duration<std::chrono::duration<Rep, Period>> : std::true_type 
  * e.g. a size divided by a length is not mistaken for a rate.
  */
 template<typename T>
-concept duration_like = _is_chrono_duration<std::remove_cvref_t<T>>::value;
+concept duration_like = _is_specialization_of_v<std::remove_cvref_t<T>, std::chrono::duration>;
 /** @endcond */
 
 /**
