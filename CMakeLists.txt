@@ -18,7 +18,7 @@ endif()
 
 project(quanta
     VERSION 0.1.0
-    DESCRIPTION "Type-safe units for temperature, frequency, electrical and spatial quantities, modeled after std::chrono"
+    DESCRIPTION "Type-safe units for temperature, frequency, electrical, spatial and data quantities, and proportions, modeled after std::chrono"
     HOMEPAGE_URL "https://github.com/cleishm/quanta-cpp"
     LANGUAGES CXX
 )

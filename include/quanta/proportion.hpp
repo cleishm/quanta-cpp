@@ -57,6 +57,23 @@
  * auto both = 50_pct * 50_pct;  // proportion<int64_t, std::ratio<1, 10000>>(2500), 25%
  * @endcode
  *
+ * ## Scaling Quantities
+ *
+ * A proportion scales the linear quantities of the other domains (electrical
+ * quantities, lengths, areas and volumes, frequencies, temperature deltas, and
+ * data sizes and rates) in the same exact way, giving the same kind of
+ * quantity at the product of the precisions:
+ *
+ * @code
+ * auto v = 3300_mV * 50_pct;      // 1.65 V, at precision 1/100000 V
+ * millivolts mv(v);               // 1650 mV (explicit: a coarser precision)
+ * auto full = 3300_mV / 50_pct;   // 6.6 V, at precision 1/10 V
+ * @endcode
+ *
+ * Absolute temperatures and decibel levels and gains are not scaled; see
+ * quanta::electro::power_gain and quanta::electro::power_proportion for
+ * converting between gains and proportions.
+ *
  * ## Integer vs Floating-Point
  *
  * - **Integer types** (default): Exact arithmetic, support modulo operations
@@ -563,6 +580,66 @@ template<typename Rep1, typename Precision1, typename Rep2, typename Precision2>
 constexpr auto operator<=>(const proportion<Rep1, Precision1>& lhs, const proportion<Rep2, Precision2>& rhs) {
     using ct = std::common_type_t<proportion<Rep1, Precision1>, proportion<Rep2, Precision2>>;
     return ct(lhs).count() <=> ct(rhs).count();
+}
+
+/**
+ * @brief Scales a linear quantity by a proportion.
+ *
+ * Defined for the linear quantities of every domain: electrical quantities
+ * (but not decibel gains), lengths, areas and volumes, frequencies,
+ * temperature deltas (but not absolute temperatures), and data sizes and
+ * rates. Decibel levels and gains, being logarithmic, are not scaled (see
+ * quanta::electro::power_gain and quanta::electro::power_proportion).
+ *
+ * The result is the same kind of quantity. Counts multiply and precisions
+ * multiply, as in a product of two proportions, so no conversion factor is
+ * needed and the result is exact for integer representations; convert it to a
+ * named precision when needed, explicitly where that loses precision. A
+ * product whose precision cannot be represented as a std::ratio is a
+ * compile-time error.
+ *
+ * @code
+ * auto v = 3300_mV * 50_pct;  // quantity<volt_unit, int64_t, std::ratio<1, 100000>>(165000), 1.65 V
+ * millivolts mv(v);           // 1650 mV (explicit: a coarser precision)
+ * auto d = 20_ppm * 1000_m;   // 20 mm, at precision 1/1000000 m
+ * @endcode
+ */
+template<typename Q, typename Rep, typename Precision>
+    requires _proportion_scalable<Q>::value
+constexpr auto operator*(const Q& q, const proportion<Rep, Precision>& p) {
+    using scalable = _proportion_scalable<Q>;
+    using cr = std::common_type_t<typename scalable::rep, Rep>;
+    using result_t =
+        typename scalable::template rebind<cr, std::ratio_multiply<typename scalable::precision, Precision>>;
+    return result_t(static_cast<cr>(q.count()) * static_cast<cr>(p.count()));
+}
+
+/** @brief Scales a linear quantity by a proportion; the same as q * p. */
+template<typename Rep, typename Precision, typename Q>
+    requires _proportion_scalable<Q>::value
+constexpr auto operator*(const proportion<Rep, Precision>& p, const Q& q) {
+    return q * p;
+}
+
+/**
+ * @brief Divides a linear quantity by a proportion.
+ *
+ * Defined for the same quantities as q * p, giving the same kind of quantity.
+ * Counts divide and precisions divide; for integer representations the count
+ * division truncates (use a finer precision or a floating-point representation
+ * for fractional results). A proportion divided by a quantity is not defined.
+ *
+ * @code
+ * auto v = 3300_mV / 50_pct;  // quantity<volt_unit, int64_t, std::deci>(66), 6.6 V
+ * @endcode
+ */
+template<typename Q, typename Rep, typename Precision>
+    requires _proportion_scalable<Q>::value
+constexpr auto operator/(const Q& q, const proportion<Rep, Precision>& p) {
+    using scalable = _proportion_scalable<Q>;
+    using cr = std::common_type_t<typename scalable::rep, Rep>;
+    using result_t = typename scalable::template rebind<cr, std::ratio_divide<typename scalable::precision, Precision>>;
+    return result_t(static_cast<cr>(q.count()) / static_cast<cr>(p.count()));
 }
 
 /**

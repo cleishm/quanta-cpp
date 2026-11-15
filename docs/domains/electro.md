@@ -202,6 +202,11 @@ power_ratio(3_dB);      // ~1.995
 amplitude_ratio(6_dB);  // ~1.995
 ```
 
+The same ratios are available as proportions, and the inverse conversions accept
+one: `power_proportion(3_dB)` and `amplitude_proportion(6_dB)` give a
+`quanta::proportion::proportion<double>`, and `power_gain(50_pct)` is ~-3.01
+dB. See [proportion](proportion.md#decibels).
+
 `add_powers` is available only for power references; for a field reference,
 summing linear amplitudes would model coherent addition instead, which is a
 different operation with a different answer.

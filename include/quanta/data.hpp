@@ -1155,6 +1155,21 @@ inline std::string to_string(const quantity<Unit, Rep, Precision>& q, scaled_t) 
 
 } // namespace quanta::data
 
+/** @cond INTERNAL */
+namespace quanta {
+
+// Data sizes and rates scale by a proportion.
+template<typename Unit, typename Rep, typename Precision>
+struct _proportion_scalable<data::quantity<Unit, Rep, Precision>> : std::true_type {
+    using rep = Rep;
+    using precision = Precision;
+    template<typename R, typename P>
+    using rebind = data::quantity<Unit, R, P>;
+};
+
+} // namespace quanta
+/** @endcond */
+
 namespace std {
 
 template<typename Unit, typename Rep1, typename Precision1, typename Rep2, typename Precision2>

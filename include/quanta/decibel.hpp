@@ -52,11 +52,20 @@
  * For the same reason a bare dB value cannot be turned into a linear ratio
  * unambiguously - 3 dB is a factor of 2 in power but ~1.41 in amplitude - so
  * power_ratio() and amplitude_ratio() are separate, explicitly named functions.
+ * power_proportion() and amplitude_proportion() give the same ratios as a
+ * quanta::proportion::proportion, and power_gain() and amplitude_gain() accept
+ * one:
+ *
+ * @code
+ * power_proportion(-3_dB);  // ~0.501, as proportion<double>
+ * power_gain(50_pct);       // ~-3.01 dB
+ * @endcode
  */
 
 #include <cassert>
 #include <cmath>
 #include <quanta/electro.hpp>
+#include <quanta/proportion.hpp>
 
 namespace quanta::electro {
 
@@ -556,6 +565,40 @@ inline double amplitude_ratio(const quantity<decibel_unit, Rep, Precision>& g) {
     return std::pow(10.0, _db_value(g) / 20.0);
 }
 
+/**
+ * @brief The linear power ratio a gain represents, as a proportion (10^(dB/10)).
+ *
+ * The value of power_ratio(), as a plain fraction (a proportion of precision
+ * 1).
+ *
+ * @code
+ * power_proportion(-3_dB);  // ~0.501 (half the power)
+ * @endcode
+ *
+ * @note Not constexpr: requires std::pow.
+ */
+template<typename Rep, typename Precision>
+inline proportion::proportion<double> power_proportion(const quantity<decibel_unit, Rep, Precision>& g) {
+    return proportion::proportion<double>(power_ratio(g));
+}
+
+/**
+ * @brief The linear amplitude ratio a gain represents, as a proportion (10^(dB/20)).
+ *
+ * The value of amplitude_ratio(), as a plain fraction (a proportion of
+ * precision 1).
+ *
+ * @code
+ * amplitude_proportion(-6_dB);  // ~0.501 (half the voltage)
+ * @endcode
+ *
+ * @note Not constexpr: requires std::pow.
+ */
+template<typename Rep, typename Precision>
+inline proportion::proportion<double> amplitude_proportion(const quantity<decibel_unit, Rep, Precision>& g) {
+    return proportion::proportion<double>(amplitude_ratio(g));
+}
+
 /** @brief The gain corresponding to a linear power ratio (10*log10(ratio)). */
 inline gain<double> power_gain(double ratio) {
     assert(ratio > 0.0 && "power_gain: ratio must be positive");
@@ -566,6 +609,41 @@ inline gain<double> power_gain(double ratio) {
 inline gain<double> amplitude_gain(double ratio) {
     assert(ratio > 0.0 && "amplitude_gain: ratio must be positive");
     return gain<double>(20.0 * std::log10(ratio));
+}
+
+/**
+ * @brief The gain corresponding to a power proportion (10*log10(p)).
+ *
+ * The proportion is taken as a plain fraction, so 50% is half the power. As
+ * for power_gain(double), it must be positive.
+ *
+ * @code
+ * power_gain(50_pct);   // ~-3.01 dB (half the power)
+ * power_gain(200_pct);  // ~3.01 dB (a doubling of power)
+ * @endcode
+ *
+ * @note Not constexpr: requires std::log10.
+ */
+template<typename Rep, typename Precision>
+inline gain<double> power_gain(const proportion::proportion<Rep, Precision>& p) {
+    return power_gain(proportion::proportion<double>(p).count());
+}
+
+/**
+ * @brief The gain corresponding to an amplitude proportion (20*log10(p)).
+ *
+ * The proportion is taken as a plain fraction, so 50% is half the voltage. As
+ * for amplitude_gain(double), it must be positive.
+ *
+ * @code
+ * amplitude_gain(50_pct);   // ~-6.02 dB (half the voltage)
+ * @endcode
+ *
+ * @note Not constexpr: requires std::log10.
+ */
+template<typename Rep, typename Precision>
+inline gain<double> amplitude_gain(const proportion::proportion<Rep, Precision>& p) {
+    return amplitude_gain(proportion::proportion<double>(p).count());
 }
 
 /**
@@ -794,6 +872,17 @@ inline std::string to_string(const level<Reference, Rep, Precision>& l, scaled_t
 }
 
 } // namespace quanta::electro
+
+/** @cond INTERNAL */
+namespace quanta {
+
+// A gain is logarithmic, so a proportion does not scale it (see
+// power_proportion and power_gain instead).
+template<typename Rep, typename Precision>
+struct _proportion_scalable<electro::quantity<electro::decibel_unit, Rep, Precision>> : std::false_type {};
+
+} // namespace quanta
+/** @endcond */
 
 namespace std {
 

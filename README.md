@@ -1,13 +1,15 @@
 # quanta
 
-Type-safe, header-only C++20 units for temperature, frequency, electrical and
-spatial quantities, modeled after `std::chrono`.
+Type-safe, header-only C++20 units for temperature, frequency, electrical,
+spatial and data quantities, and proportions, modeled after `std::chrono`.
 
 📚 **[Full API Documentation](https://cleishm.github.io/quanta-cpp/)**
 
 ```cpp
+#include <quanta/data>
 #include <quanta/electro>
 #include <quanta/frequency>
+#include <quanta/proportion>
 #include <quanta/spatial>
 #include <quanta/thermo>
 
@@ -16,11 +18,15 @@ using namespace quanta::literals;
 auto room = 22534_mc;                     // millicelsius
 auto clock = 2400_MHz;
 auto power = 3300_mV * 20_mA;             // V x I = P
+auto image = 1500_kB;
+auto drift = clock * 20_ppm;              // a proportion scales a quantity
 
 std::format("{:b.1f}", room);             // "22.5°C"
 std::format("{:s}", clock);               // "2.4GHz"
 std::format("{:s}", power);               // "66mW"
 std::format("{}", clock.wavelength<quanta::spatial::millimeters>()); // "124mm"
+std::format("{:s}", image);               // "1.5MB"
+std::format("{:s}", drift);               // "48kHz"
 ```
 
 ## Domains
@@ -33,6 +39,8 @@ Each domain has its own header and namespace, and can be used on its own.
 | Frequency (mHz to THz; period, wavelength, musical intervals) | `<quanta/frequency>` | `quanta::frequency` | [frequency](docs/domains/frequency.md) |
 | Electrical units (V, A, Ω, W, C, J, F, H) and decibels (dB, dBm, dBW, dBµV) | `<quanta/electro>`, `<quanta/decibel>` | `quanta::electro` | [electro](docs/domains/electro.md) |
 | Length, area and volume (metric and imperial) | `<quanta/spatial>` | `quanta::spatial` | [spatial](docs/domains/spatial.md) |
+| Data sizes and rates (bits, SI and IEC bytes; per second) | `<quanta/data>` | `quanta::data` | [data](docs/domains/data.md) |
+| Proportions (%, ‰, ppm, ppb), which also scale the linear quantities of the other domains | `<quanta/proportion>` | `quanta::proportion` | [proportion](docs/domains/proportion.md) |
 
 Every header is also available with a `.hpp` extension (`<quanta/thermo.hpp>`).
 
@@ -40,6 +48,9 @@ Every header is also available with a `.hpp` extension (`<quanta/thermo.hpp>`).
 
 - **Type-safe quantities**: mixing up units of different kinds is a compile error
 - **Configurable precision** and representation, as with `std::chrono::duration`
+- **Cross-quantity arithmetic** with exact result precisions: `V x I = P`,
+  length x length = area, size / duration = rate, and a proportion times any
+  linear quantity (`3300_mV * 50_pct`)
 - **Lossless implicit conversions** (lossy conversions require explicit casts)
 - **User-defined literals** for concise notation (`25_c`, `2400_MHz`, `3300_mV`, `250_mm`)
 - **`std::format` support** (when available), with markers for base-unit (`b`) and scaled (`s`) forms

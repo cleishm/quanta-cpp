@@ -5,9 +5,11 @@
 // literals-only test below sees nothing but `using namespace quanta::literals;`.
 
 #include <catch2/catch_test_macros.hpp>
+#include <quanta/data>
 #include <quanta/decibel>
 #include <quanta/electro>
 #include <quanta/frequency>
+#include <quanta/proportion>
 #include <quanta/spatial>
 #include <quanta/thermo>
 #include <string>
@@ -18,6 +20,8 @@ using namespace quanta::thermo;
 using namespace quanta::frequency;
 using namespace quanta::electro;
 using namespace quanta::spatial;
+using namespace quanta::data;
+using namespace quanta::proportion;
 using namespace quanta::literals;
 
 static_assert(treat_as_inexact_v<double>);
@@ -29,6 +33,8 @@ TEST_CASE("literals from every domain", "[combined]") {
     CHECK(3300_mV == millivolts(3300));
     CHECK(-73_dBm == dbm(-73));
     CHECK(250_mm == millimeters(250));
+    CHECK(1500_kB == kilobytes(1500));
+    CHECK(25_pct == percent(25));
 }
 
 TEST_CASE("shared formatting tags", "[combined]") {
@@ -36,10 +42,20 @@ TEST_CASE("shared formatting tags", "[combined]") {
     CHECK(to_string(megahertz(2400), scaled) == "2.4GHz");
     CHECK(to_string(millivolts(3300), base_unit) == "3.3V");
     CHECK(to_string(millimeters(1500), scaled) == "1.5m");
+    CHECK(to_string(kilobytes(1500), scaled) == "1.5MB");
+    CHECK(to_string(percent(25), base_unit) == "0.25");
 }
 
 TEST_CASE("frequency to spatial wavelength", "[combined]") {
     CHECK(megahertz(300).wavelength<quanta::spatial::millimeters>() == quanta::spatial::millimeters(999));
+}
+
+TEST_CASE("proportions scale the other domains' quantities", "[combined]") {
+    CHECK(millivolts(3300_mV * 50_pct) == 1650_mV);
+    CHECK(2400_MHz * 50_ppm == 120_kHz);
+    CHECK(quanta::spatial::millimeters(1000_m * 20_ppm) == 20_mm);
+    CHECK(megabits_per_second(100_Mbit_per_s * 80_pct) == 80_Mbit_per_s);
+    CHECK(power_gain(50_pct) == power_gain(0.5));
 }
 
 #if CONFIG_QUANTA_STD_FORMAT
@@ -49,6 +65,8 @@ TEST_CASE("std::format from every domain", "[combined]") {
     CHECK(std::format("{}", millivolts(3300)) == "3300mV");
     CHECK(std::format("{}", dbm(-73)) == "-73dBm");
     CHECK(std::format("{}", millimeters(250)) == "250mm");
+    CHECK(std::format("{}", kilobytes(1500)) == "1500kB");
+    CHECK(std::format("{}", percent(25)) == "25%");
 }
 #endif
 
@@ -64,6 +82,8 @@ TEST_CASE("quanta::literals alone provides every domain's literals", "[combined]
     CHECK(3300_mV == quanta::electro::millivolts(3300));
     CHECK(-73_dBm == quanta::electro::dbm(-73));
     CHECK(250_mm == quanta::spatial::millimeters(250));
+    CHECK(1500_kB == quanta::data::kilobytes(1500));
+    CHECK(25_pct == quanta::proportion::percent(25));
 }
 
 // A quantity whose rep is another domain's quantity converts to nothing that
@@ -88,6 +108,8 @@ static_assert(!exposes_internals<quanta::thermo::celsius>);
 static_assert(!exposes_internals<quanta::frequency::hertz>);
 static_assert(!exposes_internals<quanta::electro::volts>);
 static_assert(!exposes_internals<quanta::spatial::meters>);
+static_assert(!exposes_internals<quanta::data::bytes>);
+static_assert(!exposes_internals<quanta::proportion::percent>);
 #endif
 
 // A rep constructible only explicitly from double (a fixed-point type) is
@@ -122,6 +144,13 @@ static_assert(explicit_only<
               quanta::spatial::length<fixed>,
               quanta::spatial::length<double>,
               quanta::spatial::length<double, std::milli>>);
+static_assert(
+    explicit_only<quanta::data::size<fixed>, quanta::data::size<double>, quanta::data::size<double, std::milli>>
+);
+static_assert(explicit_only<
+              quanta::proportion::proportion<fixed>,
+              quanta::proportion::proportion<double>,
+              quanta::proportion::proportion<double, std::milli>>);
 
 TEST_CASE("explicit conversion to an explicit-only rep", "[combined]") {
     CHECK(double(quanta::thermo::delta<fixed>(quanta::thermo::delta<double>(-0.5)).count()) == -0.5);

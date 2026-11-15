@@ -1324,6 +1324,21 @@ inline std::string to_string(const quantity<Unit, Rep, Precision>& q, scaled_t) 
 
 } // namespace quanta::electro
 
+/** @cond INTERNAL */
+namespace quanta {
+
+// Every electrical quantity scales by a proportion (decibel.hpp excludes gains).
+template<typename Unit, typename Rep, typename Precision>
+struct _proportion_scalable<electro::quantity<Unit, Rep, Precision>> : std::true_type {
+    using rep = Rep;
+    using precision = Precision;
+    template<typename R, typename P>
+    using rebind = electro::quantity<Unit, R, P>;
+};
+
+} // namespace quanta
+/** @endcond */
+
 namespace std {
 
 template<typename Unit, typename Rep1, typename Precision1, typename Rep2, typename Precision2>

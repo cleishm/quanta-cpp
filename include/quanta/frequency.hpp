@@ -1225,6 +1225,21 @@ std::string to_string(const frequency<Rep, Precision>& f, scaled_t) {
 
 } // namespace quanta::frequency
 
+/** @cond INTERNAL */
+namespace quanta {
+
+// Frequencies scale by a proportion.
+template<typename Rep, typename Precision>
+struct _proportion_scalable<frequency::frequency<Rep, Precision>> : std::true_type {
+    using rep = Rep;
+    using precision = Precision;
+    template<typename R, typename P>
+    using rebind = frequency::frequency<R, P>;
+};
+
+} // namespace quanta
+/** @endcond */
+
 namespace std {
 
 template<typename Rep1, typename Precision1, typename Rep2, typename Precision2>

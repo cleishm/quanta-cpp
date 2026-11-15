@@ -1213,6 +1213,21 @@ std::string to_string(const temperature<Scale, delta<Rep, Precision>>& t, scaled
 
 } // namespace quanta::thermo
 
+/** @cond INTERNAL */
+namespace quanta {
+
+// Temperature deltas scale by a proportion; absolute temperatures do not.
+template<typename Rep, typename Precision>
+struct _proportion_scalable<thermo::delta<Rep, Precision>> : std::true_type {
+    using rep = Rep;
+    using precision = Precision;
+    template<typename R, typename P>
+    using rebind = thermo::delta<R, P>;
+};
+
+} // namespace quanta
+/** @endcond */
+
 namespace std {
 
 template<typename Rep1, typename Precision1, typename Rep2, typename Precision2>

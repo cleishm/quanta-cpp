@@ -318,6 +318,36 @@ TEST_CASE("power and amplitude ratios are distinct", "[gain]") {
     REQUIRE(watts(2) * power_ratio(10_dB) == power<double>(20.0));
 }
 
+TEST_CASE("gains convert to and from proportions", "[gain][proportion]") {
+    using namespace quanta::proportion_literals;
+    using fraction = quanta::proportion::proportion<double>;
+
+    // A plain fraction (precision 1), the same value as the ratio
+    static_assert(std::is_same_v<decltype(power_proportion(3_dB)), fraction>);
+    static_assert(std::is_same_v<decltype(amplitude_proportion(3_dB)), fraction>);
+    REQUIRE(power_proportion(3_dB).count() == Catch::Approx(1.9952623));
+    REQUIRE(amplitude_proportion(6_dB).count() == Catch::Approx(1.9952623));
+    REQUIRE(power_proportion(-3_dB).count() == Catch::Approx(0.5011872));
+    REQUIRE(power_proportion(1000_cdB).count() == power_ratio(1000_cdB));
+    REQUIRE(amplitude_proportion(1000_cdB).count() == amplitude_ratio(1000_cdB));
+
+    // A proportion is taken as a plain fraction, whatever its precision
+    static_assert(std::is_same_v<decltype(power_gain(50_pct)), gain<double>>);
+    REQUIRE(power_gain(50_pct).count() == Catch::Approx(-3.0103));
+    REQUIRE(power_gain(200_pct).count() == Catch::Approx(3.0103));
+    REQUIRE(amplitude_gain(200_pct).count() == Catch::Approx(6.0206));
+    REQUIRE(power_gain(fraction(10.0)).count() == Catch::Approx(10.0));
+    REQUIRE(power_gain(10_ppm).count() == Catch::Approx(-50.0));
+    REQUIRE(amplitude_gain(1_permille).count() == Catch::Approx(-60.0));
+    REQUIRE(power_gain(50_pct) == power_gain(0.5));
+
+    // Round trips
+    REQUIRE(power_gain(power_proportion(7_dB)).count() == Catch::Approx(7.0));
+    REQUIRE(amplitude_gain(amplitude_proportion(7_dB)).count() == Catch::Approx(7.0));
+    REQUIRE(power_proportion(power_gain(25_pct)).count() == Catch::Approx(0.25));
+    REQUIRE(amplitude_proportion(amplitude_gain(25_pct)).count() == Catch::Approx(0.25));
+}
+
 TEST_CASE("floating-point levels and gains", "[level][gain]") {
     dbm_level<double> signal{-73.5};
     REQUIRE(signal.count() == Catch::Approx(-73.5));

@@ -1,5 +1,5 @@
 version: "0.1.0"
-description: "Type-safe units for temperature, frequency, electrical and spatial quantities, modeled after std::chrono"
+description: "Type-safe units for temperature, frequency, electrical, spatial and data quantities, and proportions, modeled after std::chrono"
 url: "https://github.com/cleishm/quanta-cpp"
 repository: "https://github.com/cleishm/quanta-cpp.git"
 license: "MIT"
@@ -12,6 +12,8 @@ tags:
   - frequency
   - electrical
   - spatial
+  - data
+  - proportion
   - header-only
 dependencies:
   idf: ">=5.1"

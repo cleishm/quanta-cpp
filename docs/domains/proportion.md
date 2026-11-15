@@ -10,6 +10,8 @@ Type-safe proportions (dimensionless linear ratios), modeled after `std::chrono:
 - **Automatic conversions** between precisions
 - **Lossless implicit conversions** (lossy conversions require explicit casts)
 - **Exact products**: a proportion times a proportion is a proportion, at the product of their precisions
+- **Scaling quantities**: a proportion scales the linear quantities of the other domains, exactly (`3300_mV * 50_pct`)
+- **Decibel conversions**: to and from decibel gains, as power or amplitude ratios (in `<quanta/decibel>`; not constexpr)
 - **User-defined literals** for concise notation
 - **`std::format` support** (when available)
 - **Fully constexpr** - all operations can be evaluated at compile time
@@ -103,6 +105,64 @@ percent p = round<percent>(33_pct * 33_pct);  // 11% (10.89% rounded)
 A scalar on either side scales the count and keeps the precision (`25_pct * 2`, `2 * 25_pct`), while
 dividing two proportions gives a scalar (`50_pct / 25_pct` is `2`). A product whose precision cannot be
 represented as a `std::ratio` (such as `1_ppb * 1_ppb * 1_ppb`, 10⁻²⁷) is a compile-time error.
+
+## Scaling Quantities
+
+A proportion scales the linear quantities of the other domains, in either order, giving the same kind
+of quantity:
+
+- electrical quantities (`quanta::electro`: voltage, current, resistance, power, charge, energy,
+  capacitance and inductance), but not decibel gains
+- lengths, areas and volumes (`quanta::spatial`)
+- frequencies (`quanta::frequency`)
+- temperature deltas (`quanta::thermo::delta`), but not absolute temperatures
+- data sizes and rates (`quanta::data`)
+
+No domain header needs `<quanta/proportion>` for this; include it alongside the domain's header. As in a
+product of two proportions, counts multiply and precisions multiply, so the result is exact for integer
+representations. Its precision is usually one with no unit symbol, so convert it to a named precision
+to format it, explicitly where that loses precision:
+
+```cpp
+auto v = 3300_mV * 50_pct;        // quantity<volt_unit, int64_t, std::ratio<1, 100000>>(165000), 1.65 V
+millivolts mv(v);                 // 1650 mV (explicit: a coarser precision)
+auto drift = 2400_MHz * 20_ppm;   // 48 kHz, as hertz
+auto share = 50_pct * 10_MB;      // 5 MB, at precision 10000 B
+auto rise = delta_celsius(10) * 25_pct;  // 2.5 °C, at precision 1/100 °C
+auto v2 = voltage<double>(3.3) * proportion<double>(0.5);  // 1.65 V, as voltage<double>
+```
+
+Dividing a quantity by a proportion divides the counts and the precisions; for integer representations
+the count division truncates, as for the cross-quantity quotients of the other domains:
+
+```cpp
+auto full = 3300_mV / 50_pct;     // quantity<volt_unit, int64_t, std::deci>(66), 6.6 V
+auto part = 10_mV / 3_pct;        // 0.3 V (truncated from 0.333...)
+```
+
+A proportion divided by a quantity is not defined. Absolute temperatures and decibel levels and gains
+are not linear, so a proportion does not scale them; for decibels, see below.
+
+## Decibels
+
+A decibel gain is a logarithmic ratio, so it is converted to and from a proportion rather than scaled
+by one. `<quanta/decibel>` provides the conversions, in `quanta::electro`, with the same power/amplitude
+split as `power_ratio` and `amplitude_ratio`:
+
+```cpp
+#include <quanta/decibel>
+
+power_proportion(3_dB);       // ~2.0 (~200%), as proportion<double>
+amplitude_proportion(6_dB);   // ~2.0
+power_proportion(-3_dB);      // ~0.5: half the power
+power_gain(50_pct);           // ~-3.01 dB, as gain<double>
+amplitude_gain(50_pct);       // ~-6.02 dB
+power_gain(10_ppm);           // -50 dB
+```
+
+`power_proportion` and `amplitude_proportion` give a plain fraction (`proportion<double>`, precision 1);
+`power_gain` and `amplitude_gain` take a proportion of any precision as a plain fraction, which must be
+positive. None of them is `constexpr`, as they need `std::pow` and `std::log10`.
 
 ## Formatting
 

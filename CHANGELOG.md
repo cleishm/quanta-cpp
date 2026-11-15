@@ -4,6 +4,23 @@ All notable changes to **quanta** are documented in this file.
 
 The library follows [semantic versioning](https://semver.org/).
 
+## Unreleased
+
+### Additions
+
+- `quanta::data` (`<quanta/data>`) — data sizes and rates in bits, SI bytes
+  (kB, MB, GB) and IEC bytes (KiB, MiB, GiB), as exact ratios of the byte, with
+  `std::chrono` interop (`size / duration = rate`)
+- `quanta::proportion` (`<quanta/proportion>`) — dimensionless ratios in
+  percent, permille, ppm and ppb, as precisions of one type; a product of
+  proportions is exact
+- Scaling by a proportion: `q * p`, `p * q` and `q / p` for the linear
+  quantities of every domain (electrical quantities other than decibel gains,
+  lengths, areas and volumes, frequencies, temperature deltas, and data sizes
+  and rates), exact for integer representations (`3300_mV * 50_pct`)
+- decibel: `power_proportion` and `amplitude_proportion`, and overloads of
+  `power_gain` and `amplitude_gain` taking a proportion
+
 ## v0.1.0
 
 First release. quanta merges four libraries — thermo-cpp, frequency-cpp,

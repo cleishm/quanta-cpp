@@ -81,7 +81,8 @@
  *
  * Each domain lives in its own namespace: quanta::thermo (temperature),
  * quanta::frequency (frequency), quanta::electro (electrical units and
- * decibels) and quanta::spatial (length, area and volume). As with
+ * decibels), quanta::spatial (length, area and volume), quanta::data (data
+ * sizes and rates) and quanta::proportion (dimensionless ratios). As with
  * std::chrono, the literals of every domain are available through `using
  * namespace quanta::literals;`, and each domain's through `using namespace
  * quanta::<domain>_literals;` (e.g. quanta::frequency_literals) or `using
@@ -175,6 +176,16 @@ struct _is_ratio : std::false_type {};
 
 template<std::intmax_t Num, std::intmax_t Denom>
 struct _is_ratio<std::ratio<Num, Denom>> : std::true_type {};
+
+// Whether Q is a linear quantity that a quanta::proportion::proportion scales:
+// q * p, p * q and q / p are then defined, by proportion.hpp, and found by
+// argument-dependent lookup on the proportion, so that no domain header needs
+// to include proportion.hpp. Each domain specializes this for its linear
+// quantities, deriving from std::true_type and naming the quantity's rep and
+// precision, and rebind<R, P>, the same kind of quantity with rep R and
+// precision P.
+template<typename Q>
+struct _proportion_scalable : std::false_type {};
 
 consteval intmax_t _gcd(intmax_t m, intmax_t n) noexcept {
     while (n != 0) {
@@ -842,10 +853,11 @@ constexpr _unit_form _parse_unit_marker(std::format_parse_context& ctx, const ch
 }
 
 // The std::formatter implementation shared by the quantities of thermo,
-// frequency, electro and spatial; see each domain's formatter specializations
-// for the spec grammar. With no marker, "{}" renders the exact count and any
-// other spec the count as a double, followed by the type's own unit; a marker
-// selects another unit. Traits describes the formatted type:
+// frequency, electro, spatial, data and proportion; see each domain's
+// formatter specializations for the spec grammar. With no marker, "{}"
+// renders the exact count and any other spec the count as a double, followed
+// by the type's own unit; a marker selects another unit. Traits describes the
+// formatted type:
 // - markers: the marker letters accepted ("bs", or "pbs" with the power form)
 // - has_own_unit: whether the type has a unit label of its own. If not, "{}"
 //   is a format error, raised by no_own_unit_error() (which calls
