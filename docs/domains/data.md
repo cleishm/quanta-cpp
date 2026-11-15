@@ -5,7 +5,7 @@ Type-safe data sizes and data rates, modeled after `std::chrono::duration`. Incl
 ## Features
 
 - **Type-safe sizes and rates** with distinct types for different precisions
-- **Bits, SI and IEC units**: bit, kbit, Mbit, Gbit; B, kB, MB, GB; KiB, MiB, GiB, all defined as exact ratios of the byte (1 bit = 1/8 B, 1 kB = 1000 B, 1 KiB = 1024 B), so they mix without drift
+- **Bits, SI and IEC units**: bit, kbit, Mbit, Gbit, Tbit; B, kB, MB, GB, TB; KiB, MiB, GiB, TiB, all defined as exact ratios of the byte (1 bit = 1/8 B, 1 kB = 1000 B, 1 KiB = 1024 B), so they mix without drift
 - **`std::chrono` interop**: `size / duration = rate`, `rate × duration = size` and `size / rate = duration`, with exact result precisions (`100_kbit_per_s * 250ms` is exactly `bits(25000)`)
 - **Integer and floating-point representations** for exact or fractional precision
 - **Lossless implicit conversions** (lossy conversions require explicit casts)
@@ -142,13 +142,16 @@ All standard aliases use `int64_t` representation. The alias template
 | `kilobits` | kbit | 1000 bit = 125 B |
 | `megabits` | Mbit | 10⁶ bit = 125,000 B |
 | `gigabits` | Gbit | 10⁹ bit = 125,000,000 B |
+| `terabits` | Tbit | 10¹² bit = 125,000,000,000 B |
 | `bytes` | B | 1 B |
 | `kilobytes` | kB | 1000 B |
 | `megabytes` | MB | 10⁶ B |
 | `gigabytes` | GB | 10⁹ B |
+| `terabytes` | TB | 10¹² B |
 | `kibibytes` | KiB | 1024 B |
 | `mebibytes` | MiB | 1024² B = 1,048,576 B |
 | `gibibytes` | GiB | 1024³ B = 1,073,741,824 B |
+| `tebibytes` | TiB | 1024⁴ B = 1,099,511,627,776 B |
 
 ## Rate Types
 
@@ -163,13 +166,16 @@ conversions, rounding and comparisons as sizes, within their own unit.
 | `kilobits_per_second` | kbit/s | 125 B/s |
 | `megabits_per_second` | Mbit/s | 125,000 B/s |
 | `gigabits_per_second` | Gbit/s | 125,000,000 B/s |
+| `terabits_per_second` | Tbit/s | 125,000,000,000 B/s |
 | `bytes_per_second` | B/s | 1 B/s |
 | `kilobytes_per_second` | kB/s | 1000 B/s |
 | `megabytes_per_second` | MB/s | 10⁶ B/s |
 | `gigabytes_per_second` | GB/s | 10⁹ B/s |
+| `terabytes_per_second` | TB/s | 10¹² B/s |
 | `kibibytes_per_second` | KiB/s | 1024 B/s |
 | `mebibytes_per_second` | MiB/s | 1024² B/s |
 | `gibibytes_per_second` | GiB/s | 1024³ B/s |
+| `tebibytes_per_second` | TiB/s | 1024⁴ B/s |
 
 ## Literals
 
@@ -180,23 +186,27 @@ using namespace quanta::data_literals;
 64_kbit    // kilobits(64)
 8_Mbit     // megabits(8)
 2_Gbit     // gigabits(2)
+3_Tbit     // terabits(3)
 1500_B     // bytes(1500)
 64_kB      // kilobytes(64)
 12_MB      // megabytes(12)
 4_GB       // gigabytes(4)
+2_TB       // terabytes(2)
 4_KiB      // kibibytes(4)
 16_MiB     // mebibytes(16)
 8_GiB      // gibibytes(8)
+1_TiB      // tebibytes(1)
 ```
 
 | Rate literal | Type | | Rate literal | Type |
 |--------------|------|-|--------------|------|
-| `9600_bit_per_s` | `bits_per_second` | | `250_kB_per_s` | `kilobytes_per_second` |
-| `128_kbit_per_s` | `kilobits_per_second` | | `100_MB_per_s` | `megabytes_per_second` |
-| `100_Mbit_per_s` | `megabits_per_second` | | `2_GB_per_s` | `gigabytes_per_second` |
+| `9600_bit_per_s` | `bits_per_second` | | `100_MB_per_s` | `megabytes_per_second` |
+| `128_kbit_per_s` | `kilobits_per_second` | | `2_GB_per_s` | `gigabytes_per_second` |
+| `100_Mbit_per_s` | `megabits_per_second` | | `1_TB_per_s` | `terabytes_per_second` |
 | `10_Gbit_per_s` | `gigabits_per_second` | | `64_KiB_per_s` | `kibibytes_per_second` |
-| `512_B_per_s` | `bytes_per_second` | | `20_MiB_per_s` | `mebibytes_per_second` |
-| | | | `1_GiB_per_s` | `gibibytes_per_second` |
+| `1_Tbit_per_s` | `terabits_per_second` | | `20_MiB_per_s` | `mebibytes_per_second` |
+| `512_B_per_s` | `bytes_per_second` | | `1_GiB_per_s` | `gibibytes_per_second` |
+| `250_kB_per_s` | `kilobytes_per_second` | | `1_TiB_per_s` | `tebibytes_per_second` |
 
 There are deliberately no `kbps`- or `Bps`-style literals, which are ambiguous
 between bits and bytes: the unit is always spelled out (`bit` or `B`).
@@ -228,8 +238,8 @@ auto m = quantity_cast<mebibytes>(gigabytes(1));  // 953 MiB
 
 By default, `to_string` and `std::format` show a quantity in its **own unit**,
 whatever the format spec. `{}` renders the exact stored count with the
-precision's symbol (`bit`, `kbit`, `Mbit`, `Gbit`, `B`, `kB`, `MB`, `GB`,
-`KiB`, `MiB`, `GiB`), followed by `/s` for rates. A non-empty spec such as
+precision's symbol (`bit`, `kbit`, `Mbit`, `Gbit`, `Tbit`, `B`, `kB`, `MB`,
+`GB`, `TB`, `KiB`, `MiB`, `GiB`, `TiB`), followed by `/s` for rates. A non-empty spec such as
 `{:.1f}` changes only the number formatting: the count is rendered as a
 `double` with the spec and followed by the same suffix as `{}`. A different
 unit is shown only when you opt in with a unit marker (see below), or by
@@ -274,9 +284,9 @@ size in IEC units:
 
 | Precision | Family | Units |
 |-----------|--------|-------|
-| bit, kbit, Mbit, Gbit | bits | `bit`, `kbit`, `Mbit`, `Gbit` |
-| B, kB, MB, GB | SI bytes | `B`, `kB`, `MB`, `GB` |
-| KiB, MiB, GiB | IEC bytes | `B`, `KiB`, `MiB`, `GiB` |
+| bit, kbit, Mbit, Gbit, Tbit | bits | `bit`, `kbit`, `Mbit`, `Gbit`, `Tbit` |
+| B, kB, MB, GB, TB | SI bytes | `B`, `kB`, `MB`, `GB`, `TB` |
+| KiB, MiB, GiB, TiB | IEC bytes | `B`, `KiB`, `MiB`, `GiB`, `TiB` |
 
 Rates use the same units per second. It chooses the largest unit of the family
 in which the magnitude is at least 1, or the smallest if there is none, and
@@ -291,6 +301,7 @@ std::format("{:s}", 1500_kB);                // "1.5MB"
 std::format("{:s}", 2048_B);                 // "2.048kB" (B is SI)
 std::format("{:s}", 1536_KiB);               // "1.5MiB"
 std::format("{:s}", 1023_KiB);               // "1023KiB"
+std::format("{:s}", 4096_GiB);               // "4TiB"
 std::format("{:s}", 1500_bit);               // "1.5kbit"
 std::format("{:s}", 1500_kbit_per_s);        // "1.5Mbit/s"
 std::format("{:s}", 9600_bit_per_s);         // "9.6kbit/s"
@@ -314,8 +325,8 @@ A precision with no symbol (such as the 8 B common type of `kilobytes` and
 `5_Mbit_per_s * 2h`) has no unit of its own: `{}` and `to_string(q)` do not
 compile for it, and a spec without a marker renders the value in B or B/s. The
 `b` and `s` markers and tags work for it. Such a precision belongs to no
-family, so `s` scales it in SI bytes (`B`, `kB`, `MB`, `GB`, or the `/s`
-forms), as for bytes, whichever precisions it came from:
+family, so `s` scales it in SI bytes (`B`, `kB`, `MB`, `GB`, `TB`, or the
+`/s` forms), as for bytes, whichever precisions it came from:
 
 ```cpp
 std::format("{:b}", 1_kB + 1_KiB);           // "2024B"
@@ -332,11 +343,11 @@ applies to both sizes and rates):
 
 ```cpp
 template<>
-struct quanta::data::precision_symbol<std::tera> {
-    static constexpr const char* symbol = "TB";
+struct quanta::data::precision_symbol<std::peta> {
+    static constexpr const char* symbol = "PB";
 };
 
-to_string(size<int64_t, std::tera>(3));          // "3TB"
-to_string(rate<int64_t, std::tera>(3));          // "3TB/s"
-to_string(size<int64_t, std::tera>(3), scaled);  // "3TB" (in no family)
+to_string(size<int64_t, std::peta>(3));          // "3PB"
+to_string(rate<int64_t, std::peta>(3));          // "3PB/s"
+to_string(size<int64_t, std::peta>(3), scaled);  // "3PB" (in no family)
 ```

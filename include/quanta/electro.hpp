@@ -1115,14 +1115,10 @@ struct quantity_suffix<joule_unit, std::ratio<3600000>> {
     static std::string value() { return "kWh"; }
 };
 
+// Decibels opt out of the suffixes, so they have neither a suffix nor a
+// base-unit and scaled form (see detail::_formattable).
 template<typename Unit, typename Precision>
 concept _has_suffix = requires { quantity_suffix<Unit, Precision>::value(); };
-
-// Pairs with a base-unit and scaled form: those with a suffix, and any
-// precision of a unit whose unprefixed precision has one (V, A, ...).
-// Decibels, which opt out of the suffixes, have neither.
-template<typename Unit, typename Precision>
-concept _formattable = _has_suffix<Unit, Precision> || _has_suffix<Unit, std::ratio<1>>;
 
 // The unit the base-unit form (the `b` format marker, to_string(q,
 // base_unit)) renders in, as `scale`-sized units labeled `suffix`. SI-prefixed
@@ -1162,13 +1158,16 @@ struct _display {
     std::string suffix;
 };
 
+// The base units (see _base_display_unit) per count of a (reduced) precision.
+template<typename Unit, typename Precision>
+using _base_units_per_count =
+    typename std::ratio_divide<Precision, typename _base_display_unit<Unit, Precision>::scale>::type;
+
 // The quantity in its base unit (see _base_display_unit), as a double.
 template<typename Unit, typename Rep, typename Precision>
 _display _base_unit_display(const quantity<Unit, Rep, Precision>& q) {
-    using display = _base_display_unit<Unit, typename Precision::type>;
-    // display units per count
-    using upc = typename std::ratio_divide<typename Precision::type, typename display::scale>::type;
-    return {detail::_ratio_value<upc>(q.count()), display::suffix};
+    using p = typename Precision::type;
+    return {detail::_ratio_value<_base_units_per_count<Unit, p>>(q.count()), _base_display_unit<Unit, p>::suffix};
 }
 
 // Precisions that are SI prefixes (see si_prefix) of the unit.
@@ -1194,7 +1193,7 @@ _display _scaled_display(const quantity<Unit, Rep, Precision>& q) {
             x = count;
             exponent = _precision_exponent<p>;
         } else {
-            x = _base_unit_display(q).value;
+            x = detail::_ratio_value<_base_units_per_count<Unit, p>>(q.count());
             exponent = 0;
         }
         if (x == 0 || !std::isfinite(x)) {
@@ -1217,14 +1216,10 @@ struct _format_traits {
     static constexpr const char* markers = "bs";
     static constexpr bool has_own_unit = _has_suffix<Unit, Precision>;
 
-    // Reports "{}" for a precision with no own unit. The parameter only gives
-    // the function a path that is a constant expression, as a constexpr
-    // function needs; the formatter always calls it with true.
-    static constexpr void no_own_unit_error(bool fail = true) {
-        if (fail) {
-            _format_error("electro: precision has no unit suffix; use an explicit format spec");
-        }
-    }
+    // The format error message for "{}" on a precision with no own unit; see
+    // detail::_no_own_unit_error.
+    static constexpr const char* no_own_unit_message =
+        "electro: precision has no unit suffix; use an explicit format spec";
 
     static std::string own_unit(bool) {
         const std::string suffix = quantity_suffix<Unit, Precision>::value();
@@ -1332,7 +1327,7 @@ inline std::string to_string(const quantity<Unit, Rep, Precision>& q) {
  * @endcode
  */
 template<typename Unit, typename Rep, typename Precision>
-    requires _formattable<Unit, typename Precision::type>
+    requires detail::_formattable<quantity_suffix, Unit, typename Precision::type>
 inline std::string to_string(const quantity<Unit, Rep, Precision>& q, base_unit_t) {
     const _display d = _base_unit_display(q);
     return _fixed_string(d.value) + d.suffix;
@@ -1350,7 +1345,7 @@ inline std::string to_string(const quantity<Unit, Rep, Precision>& q, base_unit_
  * @endcode
  */
 template<typename Unit, typename Rep, typename Precision>
-    requires _formattable<Unit, typename Precision::type>
+    requires detail::_formattable<quantity_suffix, Unit, typename Precision::type>
 inline std::string to_string(const quantity<Unit, Rep, Precision>& q, scaled_t) {
     const _display d = _scaled_display(q);
     return _fixed_string(d.value) + d.suffix;
@@ -1401,7 +1396,7 @@ public:
 // without a marker renders the value in the unprefixed unit, as 'b' does:
 // std::format("{:.2f}", quantity<volt_unit, int64_t, std::ratio<1, 100000>>(165000)) == "1.65V".
 template<typename Unit, typename Rep, typename Precision>
-    requires quanta::electro::_formattable<Unit, typename Precision::type>
+    requires quanta::detail::_formattable<quanta::electro::quantity_suffix, Unit, typename Precision::type>
 struct formatter<quanta::electro::quantity<Unit, Rep, Precision>, char>
     : private quanta::detail::_unit_formatter<quanta::electro::_format_traits<Unit, typename Precision::type>> {
     using quanta::detail::_unit_formatter<quanta::electro::_format_traits<Unit, typename Precision::type>>::parse;

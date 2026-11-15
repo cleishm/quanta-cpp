@@ -21,8 +21,8 @@
  * @brief Data size and data rate types and utilities.
  *
  * This library provides type-safe handling of data quantities - sizes and
- * rates - with support for multiple precisions, in bits (bit through Gbit),
- * SI-prefixed bytes (B through GB) and IEC-prefixed bytes (KiB through GiB),
+ * rates - with support for multiple precisions, in bits (bit through Tbit),
+ * SI-prefixed bytes (B through TB) and IEC-prefixed bytes (KiB through TiB),
  * following the design of std::chrono::duration.
  *
  * ## Basic Usage
@@ -730,6 +730,8 @@ using kilobits = size<int64_t, std::ratio<125>>;
 using megabits = size<int64_t, std::ratio<125'000>>;
 /** @brief Data size with 1 Gbit (10⁹ bit = 125,000,000 B) precision. */
 using gigabits = size<int64_t, std::ratio<125'000'000>>;
+/** @brief Data size with 1 Tbit (10¹² bit = 125,000,000,000 B) precision. */
+using terabits = size<int64_t, std::ratio<125'000'000'000>>;
 
 /** @brief Data size with 1 B precision. */
 using bytes = size<int64_t>;
@@ -739,6 +741,8 @@ using kilobytes = size<int64_t, std::kilo>;
 using megabytes = size<int64_t, std::mega>;
 /** @brief Data size with 1 GB (10⁹ B) precision. */
 using gigabytes = size<int64_t, std::giga>;
+/** @brief Data size with 1 TB (10¹² B) precision. */
+using terabytes = size<int64_t, std::tera>;
 
 /** @brief Data size with 1 KiB (1024 B) precision. */
 using kibibytes = size<int64_t, std::ratio<1024>>;
@@ -746,6 +750,8 @@ using kibibytes = size<int64_t, std::ratio<1024>>;
 using mebibytes = size<int64_t, std::ratio<1024 * 1024>>;
 /** @brief Data size with 1 GiB (1024³ B) precision. */
 using gibibytes = size<int64_t, std::ratio<1024 * 1024 * 1024>>;
+/** @brief Data size with 1 TiB (1024⁴ B) precision. */
+using tebibytes = size<int64_t, std::ratio<1024LL * 1024 * 1024 * 1024>>;
 
 /** @brief Data rate with configurable representation and precision (a ratio of one B/s). */
 template<typename Rep, typename Precision = std::ratio<1>>
@@ -759,6 +765,8 @@ using kilobits_per_second = rate<int64_t, kilobits::precision>;
 using megabits_per_second = rate<int64_t, megabits::precision>;
 /** @brief Data rate with 1 Gbit/s precision. */
 using gigabits_per_second = rate<int64_t, gigabits::precision>;
+/** @brief Data rate with 1 Tbit/s precision. */
+using terabits_per_second = rate<int64_t, terabits::precision>;
 
 /** @brief Data rate with 1 B/s precision. */
 using bytes_per_second = rate<int64_t>;
@@ -768,6 +776,8 @@ using kilobytes_per_second = rate<int64_t, kilobytes::precision>;
 using megabytes_per_second = rate<int64_t, megabytes::precision>;
 /** @brief Data rate with 1 GB/s precision. */
 using gigabytes_per_second = rate<int64_t, gigabytes::precision>;
+/** @brief Data rate with 1 TB/s precision. */
+using terabytes_per_second = rate<int64_t, terabytes::precision>;
 
 /** @brief Data rate with 1 KiB/s precision. */
 using kibibytes_per_second = rate<int64_t, kibibytes::precision>;
@@ -775,6 +785,8 @@ using kibibytes_per_second = rate<int64_t, kibibytes::precision>;
 using mebibytes_per_second = rate<int64_t, mebibytes::precision>;
 /** @brief Data rate with 1 GiB/s precision. */
 using gibibytes_per_second = rate<int64_t, gibibytes::precision>;
+/** @brief Data rate with 1 TiB/s precision. */
+using tebibytes_per_second = rate<int64_t, tebibytes::precision>;
 
 /** @} */ // end of DataQuantityTypes group
 
@@ -786,7 +798,8 @@ using gibibytes_per_second = rate<int64_t, gibibytes::precision>;
  * @brief Trait giving the display symbol for a data precision.
  *
  * Specializations exist for the precisions of the standard aliases: "bit",
- * "kbit", "Mbit", "Gbit", "B", "kB", "MB", "GB", "KiB", "MiB" and "GiB".
+ * "kbit", "Mbit", "Gbit", "Tbit", "B", "kB", "MB", "GB", "TB", "KiB", "MiB",
+ * "GiB" and "TiB".
  * @tparam Precision The (reduced) precision ratio.
  */
 template<typename Precision>
@@ -814,6 +827,11 @@ struct precision_symbol<gigabits::precision> {
 };
 
 template<>
+struct precision_symbol<terabits::precision> {
+    static constexpr const char* symbol = "Tbit";
+};
+
+template<>
 struct precision_symbol<bytes::precision> {
     static constexpr const char* symbol = "B";
 };
@@ -834,6 +852,11 @@ struct precision_symbol<gigabytes::precision> {
 };
 
 template<>
+struct precision_symbol<terabytes::precision> {
+    static constexpr const char* symbol = "TB";
+};
+
+template<>
 struct precision_symbol<kibibytes::precision> {
     static constexpr const char* symbol = "KiB";
 };
@@ -846,6 +869,11 @@ struct precision_symbol<mebibytes::precision> {
 template<>
 struct precision_symbol<gibibytes::precision> {
     static constexpr const char* symbol = "GiB";
+};
+
+template<>
+struct precision_symbol<tebibytes::precision> {
+    static constexpr const char* symbol = "TiB";
 };
 /** @endcond */
 
@@ -896,11 +924,6 @@ struct quantity_suffix<byte_per_second_unit, Precision> {
 template<typename Unit, typename Precision>
 concept _has_suffix = requires { quantity_suffix<Unit, Precision>::value(); };
 
-// Pairs with a base-unit and scaled form: those with a suffix, and those of a
-// unit whose base unit has one (B or B/s), whatever their precision.
-template<typename Unit, typename Precision>
-concept _formattable = _has_suffix<Unit, Precision> || _has_suffix<Unit, std::ratio<1>>;
-
 // A value and suffix to display, for the base-unit and scaled forms.
 struct _display {
     double value;
@@ -908,9 +931,9 @@ struct _display {
 };
 
 // The units the scaled form chooses between for a precision: the bit units
-// (bit, kbit, Mbit, Gbit), the SI byte units (B, kB, MB, GB) or the IEC byte
-// units (B, KiB, MiB, GiB). Precisions outside these families render in their
-// own unit, or, where they have none, in SI bytes.
+// (bit, kbit, Mbit, Gbit, Tbit), the SI byte units (B, kB, MB, GB, TB) or the
+// IEC byte units (B, KiB, MiB, GiB, TiB). Precisions outside these families
+// render in their own unit, or, where they have none, in SI bytes.
 enum class _scale_family { own, bit, si, iec };
 
 template<typename Precision>
@@ -925,6 +948,8 @@ inline constexpr _scale_family _family_of<megabits::precision> = _scale_family::
 template<>
 inline constexpr _scale_family _family_of<gigabits::precision> = _scale_family::bit;
 template<>
+inline constexpr _scale_family _family_of<terabits::precision> = _scale_family::bit;
+template<>
 inline constexpr _scale_family _family_of<bytes::precision> = _scale_family::si;
 template<>
 inline constexpr _scale_family _family_of<kilobytes::precision> = _scale_family::si;
@@ -933,11 +958,15 @@ inline constexpr _scale_family _family_of<megabytes::precision> = _scale_family:
 template<>
 inline constexpr _scale_family _family_of<gigabytes::precision> = _scale_family::si;
 template<>
+inline constexpr _scale_family _family_of<terabytes::precision> = _scale_family::si;
+template<>
 inline constexpr _scale_family _family_of<kibibytes::precision> = _scale_family::iec;
 template<>
 inline constexpr _scale_family _family_of<mebibytes::precision> = _scale_family::iec;
 template<>
 inline constexpr _scale_family _family_of<gibibytes::precision> = _scale_family::iec;
+template<>
+inline constexpr _scale_family _family_of<tebibytes::precision> = _scale_family::iec;
 
 // The units of each family, in ascending order: for the bit and SI families
 // by power-of-ten exponent of one bit and one byte respectively, for the IEC
@@ -947,16 +976,17 @@ struct _scale_units {};
 
 template<>
 struct _scale_units<byte_unit> {
-    static constexpr detail::_scale_entry bit[] = {{0, "bit"}, {3, "kbit"}, {6, "Mbit"}, {9, "Gbit"}};
-    static constexpr detail::_scale_entry si[] = {{0, "B"}, {3, "kB"}, {6, "MB"}, {9, "GB"}};
-    static constexpr detail::_scale_entry iec[] = {{0, "B"}, {1, "KiB"}, {2, "MiB"}, {3, "GiB"}};
+    static constexpr detail::_scale_entry bit[] = {{0, "bit"}, {3, "kbit"}, {6, "Mbit"}, {9, "Gbit"}, {12, "Tbit"}};
+    static constexpr detail::_scale_entry si[] = {{0, "B"}, {3, "kB"}, {6, "MB"}, {9, "GB"}, {12, "TB"}};
+    static constexpr detail::_scale_entry iec[] = {{0, "B"}, {1, "KiB"}, {2, "MiB"}, {3, "GiB"}, {4, "TiB"}};
 };
 
 template<>
 struct _scale_units<byte_per_second_unit> {
-    static constexpr detail::_scale_entry bit[] = {{0, "bit/s"}, {3, "kbit/s"}, {6, "Mbit/s"}, {9, "Gbit/s"}};
-    static constexpr detail::_scale_entry si[] = {{0, "B/s"}, {3, "kB/s"}, {6, "MB/s"}, {9, "GB/s"}};
-    static constexpr detail::_scale_entry iec[] = {{0, "B/s"}, {1, "KiB/s"}, {2, "MiB/s"}, {3, "GiB/s"}};
+    static constexpr detail::_scale_entry bit[] =
+        {{0, "bit/s"}, {3, "kbit/s"}, {6, "Mbit/s"}, {9, "Gbit/s"}, {12, "Tbit/s"}};
+    static constexpr detail::_scale_entry si[] = {{0, "B/s"}, {3, "kB/s"}, {6, "MB/s"}, {9, "GB/s"}, {12, "TB/s"}};
+    static constexpr detail::_scale_entry iec[] = {{0, "B/s"}, {1, "KiB/s"}, {2, "MiB/s"}, {3, "GiB/s"}, {4, "TiB/s"}};
 };
 
 consteval int _log1024(intmax_t n) {
@@ -968,19 +998,10 @@ consteval int _log1024(intmax_t n) {
     return e;
 }
 
-// As detail::_pick_scale, for a table of units 1024^exponent bytes: the value
-// x x 1024^exponent in the largest unit of table (ascending by exponent) in
-// which its magnitude is at least 1, else in the smallest. Scaling by a power
+// v x 1024^k, for detail::_pick_scale over the IEC family. Scaling by a power
 // of two is exact, so values that land exactly on a unit are exactly 1 in it.
-template<std::size_t N>
-detail::_scaled _pick_binary_scale(double x, int exponent, const detail::_scale_entry (&table)[N]) {
-    for (std::size_t i = N; i-- > 1;) {
-        const double v = std::ldexp(x, 10 * (exponent - table[i].exponent));
-        if (v >= 1.0 || v <= -1.0) {
-            return {v, table[i].label};
-        }
-    }
-    return {std::ldexp(x, 10 * (exponent - table[0].exponent)), table[0].label};
+inline double _scale_pow1024(double v, int k) {
+    return std::ldexp(v, 10 * k);
 }
 
 // The quantity in the unit's base unit (B or B/s), as a double.
@@ -1008,7 +1029,7 @@ _display _scaled_display(const quantity<Unit, Rep, Precision>& q) {
     if constexpr (family == _scale_family::own) {
         return {count, quantity_suffix<Unit, p>::value()};
     } else if constexpr (family == _scale_family::si && !detail::_power_of_ten_precision<p>) {
-        const double x = _base_unit_display(q).value;
+        const double x = detail::_ratio_value<p>(q.count());
         if (x == 0 || !std::isfinite(x)) {
             return {x, Unit::symbol};
         }
@@ -1031,7 +1052,8 @@ _display _scaled_display(const quantity<Unit, Rep, Precision>& q) {
             const detail::_scaled s = detail::_pick_scale(count, _precision_exponent<p>, _scale_units<Unit>::si);
             return {s.value, s.label};
         } else {
-            const detail::_scaled s = _pick_binary_scale(count, _log1024(p::num), _scale_units<Unit>::iec);
+            const detail::_scaled s =
+                detail::_pick_scale(count, _log1024(p::num), _scale_units<Unit>::iec, _scale_pow1024);
             return {s.value, s.label};
         }
     }
@@ -1046,14 +1068,10 @@ struct _format_traits {
     static constexpr const char* markers = "bs";
     static constexpr bool has_own_unit = _has_suffix<Unit, Precision>;
 
-    // Reports "{}" for a precision with no own unit. The parameter only gives
-    // the function a path that is a constant expression, as a constexpr
-    // function needs; the formatter always calls it with true.
-    static constexpr void no_own_unit_error(bool fail = true) {
-        if (fail) {
-            _format_error("data: precision has no unit symbol; use an explicit format spec");
-        }
-    }
+    // The format error message for "{}" on a precision with no own unit; see
+    // detail::_no_own_unit_error.
+    static constexpr const char* no_own_unit_message =
+        "data: precision has no unit symbol; use an explicit format spec";
 
     static std::string own_unit(bool) {
         const std::string suffix = quantity_suffix<Unit, Precision>::value();
@@ -1106,14 +1124,15 @@ using quanta::base_unit_t;
  *
  * The quantity is shown in the largest unit of its precision's family in
  * which the magnitude is at least 1, or the smallest of the family if there
- * is none; zero is shown in the base unit (B or B/s). The family is that of
- * the precision: bit, kbit, Mbit and Gbit for the bit precisions; B, kB, MB
- * and GB for bytes and the SI-prefixed precisions; and B, KiB, MiB and GiB
- * for the IEC-prefixed precisions. Rates use the same units per second. Other
- * precisions are shown in their own unit, or, where they have no symbol (such
- * as the 8 B common type of kilobytes and kibibytes), in B, kB, MB and GB. The
- * value is rendered in the shortest fixed notation that round-trips (never
- * scientific), exactly as by the `s` format marker.
+ * is none; zero and non-finite values are shown in the family's smallest unit
+ * (bit or bit/s for the bit family, otherwise B or B/s). The family is that
+ * of the precision: bit, kbit, Mbit, Gbit and Tbit for the bit precisions; B,
+ * kB, MB, GB and TB for bytes and the SI-prefixed precisions; and B, KiB, MiB,
+ * GiB and TiB for the IEC-prefixed precisions. Rates use the same units per
+ * second. Other precisions are shown in their own unit, or, where they have no
+ * symbol (such as the 8 B common type of kilobytes and kibibytes), in B, kB,
+ * MB, GB and TB. The value is rendered in the shortest fixed notation that
+ * round-trips (never scientific), exactly as by the `s` format marker.
  *
  * @code
  * to_string(kilobytes(1500), scaled);            // "1.5MB"
@@ -1159,7 +1178,7 @@ inline std::string to_string(const quantity<Unit, Rep, Precision>& q) {
  * @endcode
  */
 template<typename Unit, typename Rep, typename Precision>
-    requires _formattable<Unit, typename Precision::type>
+    requires detail::_formattable<quantity_suffix, Unit, typename Precision::type>
 inline std::string to_string(const quantity<Unit, Rep, Precision>& q, base_unit_t) {
     const _display d = _base_unit_display(q);
     return _fixed_string(d.value) + d.suffix;
@@ -1177,7 +1196,7 @@ inline std::string to_string(const quantity<Unit, Rep, Precision>& q, base_unit_
  * @endcode
  */
 template<typename Unit, typename Rep, typename Precision>
-    requires _formattable<Unit, typename Precision::type>
+    requires detail::_formattable<quantity_suffix, Unit, typename Precision::type>
 inline std::string to_string(const quantity<Unit, Rep, Precision>& q, scaled_t) {
     const _display d = _scaled_display(q);
     return _fixed_string(d.value) + d.suffix;
@@ -1228,7 +1247,7 @@ public:
 // std::format("{:.2f}", 1_kB + 1_KiB) == "2024.00B" and
 // std::format("{:s}", 1_kB + 1_KiB) == "2.024kB".
 template<typename Unit, typename Rep, typename Precision>
-    requires quanta::data::_formattable<Unit, typename Precision::type>
+    requires quanta::detail::_formattable<quanta::data::quantity_suffix, Unit, typename Precision::type>
 struct formatter<quanta::data::quantity<Unit, Rep, Precision>, char>
     : private quanta::detail::_unit_formatter<quanta::data::_format_traits<Unit, typename Precision::type>> {
     using quanta::detail::_unit_formatter<quanta::data::_format_traits<Unit, typename Precision::type>>::parse;
@@ -1272,6 +1291,12 @@ constexpr quanta::data::gigabits operator""_Gbit() {
     return detail::check_overflow<quanta::data::gigabits, Digits...>();
 }
 
+/** @brief Literal for terabits (e.g., 3_Tbit). */
+template<char... Digits>
+constexpr quanta::data::terabits operator""_Tbit() {
+    return detail::check_overflow<quanta::data::terabits, Digits...>();
+}
+
 /** @brief Literal for bytes (e.g., 1500_B). */
 template<char... Digits>
 constexpr quanta::data::bytes operator""_B() {
@@ -1296,6 +1321,12 @@ constexpr quanta::data::gigabytes operator""_GB() {
     return detail::check_overflow<quanta::data::gigabytes, Digits...>();
 }
 
+/** @brief Literal for terabytes (e.g., 2_TB). */
+template<char... Digits>
+constexpr quanta::data::terabytes operator""_TB() {
+    return detail::check_overflow<quanta::data::terabytes, Digits...>();
+}
+
 /** @brief Literal for kibibytes (e.g., 4_KiB). */
 template<char... Digits>
 constexpr quanta::data::kibibytes operator""_KiB() {
@@ -1312,6 +1343,12 @@ constexpr quanta::data::mebibytes operator""_MiB() {
 template<char... Digits>
 constexpr quanta::data::gibibytes operator""_GiB() {
     return detail::check_overflow<quanta::data::gibibytes, Digits...>();
+}
+
+/** @brief Literal for tebibytes (e.g., 1_TiB). */
+template<char... Digits>
+constexpr quanta::data::tebibytes operator""_TiB() {
+    return detail::check_overflow<quanta::data::tebibytes, Digits...>();
 }
 
 /** @brief Literal for bits per second (e.g., 9600_bit_per_s). */
@@ -1338,6 +1375,12 @@ constexpr quanta::data::gigabits_per_second operator""_Gbit_per_s() {
     return detail::check_overflow<quanta::data::gigabits_per_second, Digits...>();
 }
 
+/** @brief Literal for terabits per second (e.g., 1_Tbit_per_s). */
+template<char... Digits>
+constexpr quanta::data::terabits_per_second operator""_Tbit_per_s() {
+    return detail::check_overflow<quanta::data::terabits_per_second, Digits...>();
+}
+
 /** @brief Literal for bytes per second (e.g., 512_B_per_s). */
 template<char... Digits>
 constexpr quanta::data::bytes_per_second operator""_B_per_s() {
@@ -1362,6 +1405,12 @@ constexpr quanta::data::gigabytes_per_second operator""_GB_per_s() {
     return detail::check_overflow<quanta::data::gigabytes_per_second, Digits...>();
 }
 
+/** @brief Literal for terabytes per second (e.g., 1_TB_per_s). */
+template<char... Digits>
+constexpr quanta::data::terabytes_per_second operator""_TB_per_s() {
+    return detail::check_overflow<quanta::data::terabytes_per_second, Digits...>();
+}
+
 /** @brief Literal for kibibytes per second (e.g., 64_KiB_per_s). */
 template<char... Digits>
 constexpr quanta::data::kibibytes_per_second operator""_KiB_per_s() {
@@ -1378,6 +1427,12 @@ constexpr quanta::data::mebibytes_per_second operator""_MiB_per_s() {
 template<char... Digits>
 constexpr quanta::data::gibibytes_per_second operator""_GiB_per_s() {
     return detail::check_overflow<quanta::data::gibibytes_per_second, Digits...>();
+}
+
+/** @brief Literal for tebibytes per second (e.g., 1_TiB_per_s). */
+template<char... Digits>
+constexpr quanta::data::tebibytes_per_second operator""_TiB_per_s() {
+    return detail::check_overflow<quanta::data::tebibytes_per_second, Digits...>();
 }
 
 } // namespace data_literals

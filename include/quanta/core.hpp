@@ -525,8 +525,17 @@ constexpr double _ratio_value(const Rep& count) {
 template<typename Precision>
 concept _power_of_ten_precision = _is_power_of_ten(Precision::num) && _is_power_of_ten(Precision::den);
 
-// An entry of a scaled-form unit table: a unit 10^exponent times the base unit,
-// and its label (an SI prefix, or a whole unit suffix).
+// Pairs of a unit and (reduced) precision with a base-unit and scaled form,
+// in a domain whose suffixes are given by Suffix (its quantity_suffix): those
+// with a suffix, and any precision of a unit whose base unit (std::ratio<1>)
+// has one.
+template<template<typename, typename> class Suffix, typename Unit, typename Precision>
+concept _formattable =
+    requires { Suffix<Unit, Precision>::value(); } || requires { Suffix<Unit, std::ratio<1>>::value(); };
+
+// An entry of a scaled-form unit table: a unit radix^exponent times the base
+// unit (ten, unless _pick_scale is given another scaling), and its label (an
+// SI prefix, or a whole unit suffix).
 struct _scale_entry {
     int exponent;
     const char* label;
@@ -552,20 +561,22 @@ struct _scaled {
     const char* label;
 };
 
-// The value x x 10^exponent (of the base unit) in the largest unit of table
+// The value x x radix^exponent (of the base unit) in the largest unit of table
 // (ascending by exponent) in which its magnitude is at least 1, else in the
-// smallest. Each candidate is computed from x with a single scaling by a power
-// of ten, so values that land exactly on a unit are exactly 1 in it. Zero and
+// smallest. scale(v, k) is v x radix^k with a single rounding; by default the
+// radix is ten (_scale_pow10). Each candidate is computed from x with a single
+// scaling, so values that land exactly on a unit are exactly 1 in it. Zero and
 // non-finite values are left to the caller.
 template<std::size_t N>
-_scaled _pick_scale(double x, int exponent, const _scale_entry (&table)[N]) {
+_scaled
+_pick_scale(double x, int exponent, const _scale_entry (&table)[N], double (*scale)(double, int) = _scale_pow10) {
     for (std::size_t i = N; i-- > 1;) {
-        const double v = _scale_pow10(x, exponent - table[i].exponent);
+        const double v = scale(x, exponent - table[i].exponent);
         if (v >= 1.0 || v <= -1.0) {
             return {v, table[i].label};
         }
     }
-    return {_scale_pow10(x, exponent - table[0].exponent), table[0].label};
+    return {scale(x, exponent - table[0].exponent), table[0].label};
 }
 
 // The precision of the std::common_type of two quantities of the same kind:
@@ -841,6 +852,16 @@ constexpr _unit_form _parse_unit_marker(std::format_parse_context& ctx, const ch
     return _unit_form::own;
 }
 
+// Reports "{}" (or "{:p}") for a type with no own unit, with the domain's
+// message. The fail parameter only gives the function a path that is a
+// constant expression, as a constexpr function needs; the formatter always
+// calls it with true.
+constexpr void _no_own_unit_error(const char* message, bool fail = true) {
+    if (fail) {
+        _format_error(message);
+    }
+}
+
 // The std::formatter implementation shared by the quantities of thermo,
 // frequency, electro, spatial and data; see each domain's formatter
 // specializations for the spec grammar. With no marker, "{}" renders the exact
@@ -849,8 +870,7 @@ constexpr _unit_form _parse_unit_marker(std::format_parse_context& ctx, const ch
 // - markers: the marker letters accepted ("bs", or "pbs" with the power form)
 // - has_own_unit: whether the type has a unit label of its own. If not, "{}"
 //   (and "{:p}", its power form) is a format error, raised by
-//   no_own_unit_error() (which calls _format_error with the domain's message,
-//   so that the message shows at the point of the diagnostic), and any other
+//   _no_own_unit_error with the domain's no_own_unit_message, and any other
 //   spec without a marker, or with only 'p', renders in the base unit.
 // - own_unit(power): the own unit (or its power form), obtained before
 //   anything is written; append_own_unit(out, own_unit) appends it
@@ -871,7 +891,7 @@ public:
         if (it == ctx.end() || *it == '}') {
             if constexpr (!Traits::has_own_unit) {
                 if (_form == _unit_form::own || _form == _unit_form::power) {
-                    Traits::no_own_unit_error();
+                    _no_own_unit_error(Traits::no_own_unit_message);
                 }
             }
             return it;

@@ -1102,11 +1102,6 @@ struct quantity_suffix<cubic_meter_unit, us_gallons::precision> {
 template<typename Unit, typename Precision>
 concept _has_suffix = requires { quantity_suffix<Unit, Precision>::value(); };
 
-// Pairs with a base-unit and scaled form: those with a suffix, and those of a
-// unit whose base unit has one (m, m² or m³), whatever their precision.
-template<typename Unit, typename Precision>
-concept _formattable = _has_suffix<Unit, Precision> || _has_suffix<Unit, std::ratio<1>>;
-
 // The power-form suffix: power_value() when the specialization provides it,
 // otherwise the default suffix.
 template<typename Unit, typename Precision>
@@ -1176,7 +1171,7 @@ _display _scaled_display(const quantity<Unit, Rep, Precision>& q) {
             x = count;
             exponent = _precision_exponent<p>;
         } else {
-            x = _base_unit_display(q).value;
+            x = detail::_ratio_value<p>(q.count());
             exponent = 0;
         }
         if (x == 0 || !std::isfinite(x)) {
@@ -1200,14 +1195,10 @@ struct _format_traits {
     static constexpr const char* markers = "pbs";
     static constexpr bool has_own_unit = _has_suffix<Unit, Precision>;
 
-    // Reports "{}" (or "{:p}") for a precision with no own unit. The parameter
-    // only gives the function a path that is a constant expression, as a
-    // constexpr function needs; the formatter always calls it with true.
-    static constexpr void no_own_unit_error(bool fail = true) {
-        if (fail) {
-            _format_error("spatial: precision has no unit suffix; use an explicit format spec");
-        }
-    }
+    // The format error message for "{}" (or "{:p}") on a precision with no own
+    // unit; see detail::_no_own_unit_error.
+    static constexpr const char* no_own_unit_message =
+        "spatial: precision has no unit suffix; use an explicit format spec";
 
     static std::string own_unit(bool power) {
         const std::string suffix = power ? _power_suffix<Unit, Precision>() : quantity_suffix<Unit, Precision>::value();
@@ -1357,7 +1348,7 @@ inline std::string to_string(const quantity<Unit, Rep, Precision>& q, power_form
  * @endcode
  */
 template<typename Unit, typename Rep, typename Precision>
-    requires _formattable<Unit, typename Precision::type>
+    requires detail::_formattable<quantity_suffix, Unit, typename Precision::type>
 inline std::string to_string(const quantity<Unit, Rep, Precision>& q, base_unit_t) {
     const _display d = _base_unit_display(q);
     return _fixed_string(d.value) + d.suffix;
@@ -1375,7 +1366,7 @@ inline std::string to_string(const quantity<Unit, Rep, Precision>& q, base_unit_
  * @endcode
  */
 template<typename Unit, typename Rep, typename Precision>
-    requires _formattable<Unit, typename Precision::type>
+    requires detail::_formattable<quantity_suffix, Unit, typename Precision::type>
 inline std::string to_string(const quantity<Unit, Rep, Precision>& q, scaled_t) {
     const _display d = _scaled_display(q);
     return _fixed_string(d.value) + d.suffix;
@@ -1429,7 +1420,7 @@ public:
 // only 'p', renders the value in the base unit, as 'b' does:
 // std::format("{:.2f}", length<int64_t, std::ratio<8>>(5)) == "40.00m".
 template<typename Unit, typename Rep, typename Precision>
-    requires quanta::spatial::_formattable<Unit, typename Precision::type>
+    requires quanta::detail::_formattable<quanta::spatial::quantity_suffix, Unit, typename Precision::type>
 struct formatter<quanta::spatial::quantity<Unit, Rep, Precision>, char>
     : private quanta::detail::_unit_formatter<quanta::spatial::_format_traits<Unit, typename Precision::type>> {
     using quanta::detail::_unit_formatter<quanta::spatial::_format_traits<Unit, typename Precision::type>>::parse;

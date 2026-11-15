@@ -9,8 +9,8 @@ The library follows [semantic versioning](https://semver.org/).
 ### Additions
 
 - `quanta::data` (`<quanta/data>`) — data sizes and rates in bits, SI bytes
-  (kB, MB, GB) and IEC bytes (KiB, MiB, GiB), as exact ratios of the byte, with
-  `std::chrono` interop (`size / duration = rate`)
+  (kB, MB, GB, TB) and IEC bytes (KiB, MiB, GiB, TiB), as exact ratios of the
+  byte, with `std::chrono` interop (`size / duration = rate`)
 
 ### Changes
 

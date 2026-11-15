@@ -184,6 +184,13 @@ static_assert(kilobits(kibibytes(1)).count() == 8);  // 8.192 kbit
 static_assert(megabits(megabytes(1)).count() == 8);  // exact
 static_assert(gigabytes(gibibytes(1)).count() == 1); // 1.074 GB
 static_assert(gibibytes(gigabytes(1)).count() == 0); // 0.93 GiB
+static_assert(terabytes(tebibytes(1)).count() == 1); // 1.1 TB
+static_assert(tebibytes(terabytes(1)).count() == 0); // 0.91 TiB
+static_assert(gibibytes(tebibytes(3)).count() == 3072);
+static_assert(terabits(terabytes(1)).count() == 8);
+static_assert(std::is_same_v<terabytes::precision, std::tera>);
+static_assert(std::is_same_v<tebibytes::precision, std::ratio<1'099'511'627'776>>);
+static_assert(std::is_same_v<terabits::precision, std::ratio<125'000'000'000>>);
 static_assert(bytes(bits(-15)).count() == -1);
 static_assert(kibibytes_per_second(kilobytes_per_second(3)).count() == 2);
 
@@ -435,24 +442,30 @@ static_assert(12_bit == bits(12));
 static_assert(64_kbit == kilobits(64));
 static_assert(8_Mbit == megabits(8));
 static_assert(2_Gbit == gigabits(2));
+static_assert(3_Tbit == terabits(3));
 static_assert(1500_B == bytes(1500));
 static_assert(64_kB == kilobytes(64));
 static_assert(12_MB == megabytes(12));
 static_assert(4_GB == gigabytes(4));
+static_assert(2_TB == terabytes(2));
 static_assert(4_KiB == kibibytes(4));
 static_assert(16_MiB == mebibytes(16));
 static_assert(8_GiB == gibibytes(8));
+static_assert(1_TiB == tebibytes(1));
 static_assert(std::is_same_v<decltype(12_bit), bits>);
 static_assert(std::is_same_v<decltype(64_kbit), kilobits>);
 static_assert(std::is_same_v<decltype(8_Mbit), megabits>);
 static_assert(std::is_same_v<decltype(2_Gbit), gigabits>);
+static_assert(std::is_same_v<decltype(3_Tbit), terabits>);
 static_assert(std::is_same_v<decltype(1500_B), bytes>);
 static_assert(std::is_same_v<decltype(64_kB), kilobytes>);
 static_assert(std::is_same_v<decltype(12_MB), megabytes>);
 static_assert(std::is_same_v<decltype(4_GB), gigabytes>);
+static_assert(std::is_same_v<decltype(2_TB), terabytes>);
 static_assert(std::is_same_v<decltype(4_KiB), kibibytes>);
 static_assert(std::is_same_v<decltype(16_MiB), mebibytes>);
 static_assert(std::is_same_v<decltype(8_GiB), gibibytes>);
+static_assert(std::is_same_v<decltype(1_TiB), tebibytes>);
 static_assert(9223372036854775807_B == bytes::max());
 static_assert(0x7fff'ffff'ffff'ffff_GiB == gibibytes::max());
 
@@ -461,24 +474,30 @@ static_assert(9600_bit_per_s == bits_per_second(9600));
 static_assert(128_kbit_per_s == kilobits_per_second(128));
 static_assert(100_Mbit_per_s == megabits_per_second(100));
 static_assert(10_Gbit_per_s == gigabits_per_second(10));
+static_assert(1_Tbit_per_s == terabits_per_second(1));
 static_assert(512_B_per_s == bytes_per_second(512));
 static_assert(250_kB_per_s == kilobytes_per_second(250));
 static_assert(100_MB_per_s == megabytes_per_second(100));
 static_assert(2_GB_per_s == gigabytes_per_second(2));
+static_assert(1_TB_per_s == terabytes_per_second(1));
 static_assert(64_KiB_per_s == kibibytes_per_second(64));
 static_assert(20_MiB_per_s == mebibytes_per_second(20));
 static_assert(1_GiB_per_s == gibibytes_per_second(1));
+static_assert(1_TiB_per_s == tebibytes_per_second(1));
 static_assert(std::is_same_v<decltype(9600_bit_per_s), bits_per_second>);
 static_assert(std::is_same_v<decltype(128_kbit_per_s), kilobits_per_second>);
 static_assert(std::is_same_v<decltype(100_Mbit_per_s), megabits_per_second>);
 static_assert(std::is_same_v<decltype(10_Gbit_per_s), gigabits_per_second>);
+static_assert(std::is_same_v<decltype(1_Tbit_per_s), terabits_per_second>);
 static_assert(std::is_same_v<decltype(512_B_per_s), bytes_per_second>);
 static_assert(std::is_same_v<decltype(250_kB_per_s), kilobytes_per_second>);
 static_assert(std::is_same_v<decltype(100_MB_per_s), megabytes_per_second>);
 static_assert(std::is_same_v<decltype(2_GB_per_s), gigabytes_per_second>);
+static_assert(std::is_same_v<decltype(1_TB_per_s), terabytes_per_second>);
 static_assert(std::is_same_v<decltype(64_KiB_per_s), kibibytes_per_second>);
 static_assert(std::is_same_v<decltype(20_MiB_per_s), mebibytes_per_second>);
 static_assert(std::is_same_v<decltype(1_GiB_per_s), gibibytes_per_second>);
+static_assert(std::is_same_v<decltype(1_TiB_per_s), tebibytes_per_second>);
 static_assert(9223372036854775807_bit_per_s == bits_per_second::max());
 
 // Integer literal forms
@@ -493,6 +512,10 @@ static_assert(1_B == 8_bit);
 static_assert(1_KiB == 1024_B);
 static_assert(1_kB == 8_kbit);
 static_assert(1_Gbit == 125_MB);
+static_assert(1_Tbit == 125_GB);
+static_assert(1_TB == 1000_GB);
+static_assert(1_TiB == 1024_GiB);
+static_assert(1_TB_per_s == 8_Tbit_per_s);
 static_assert(-3_KiB == kibibytes(-3));
 static_assert(1500_kB / 500ms == 3_MB_per_s);
 static_assert(100_kbit_per_s * 250ms == 25_kbit);
@@ -675,13 +698,16 @@ TEST_CASE("size suffixes", "[format]") {
     check_suffix(kilobits(64), "kbit");
     check_suffix(megabits(8), "Mbit");
     check_suffix(gigabits(2), "Gbit");
+    check_suffix(terabits(3), "Tbit");
     check_suffix(bytes(1500), "B");
     check_suffix(kilobytes(64), "kB");
     check_suffix(megabytes(12), "MB");
     check_suffix(gigabytes(4), "GB");
+    check_suffix(terabytes(2), "TB");
     check_suffix(kibibytes(4), "KiB");
     check_suffix(mebibytes(16), "MiB");
     check_suffix(gibibytes(8), "GiB");
+    check_suffix(tebibytes(1), "TiB");
     check_suffix(bytes(-3), "B");
 }
 
@@ -690,13 +716,16 @@ TEST_CASE("rate suffixes", "[format]") {
     check_suffix(kilobits_per_second(128), "kbit/s");
     check_suffix(megabits_per_second(100), "Mbit/s");
     check_suffix(gigabits_per_second(10), "Gbit/s");
+    check_suffix(terabits_per_second(1), "Tbit/s");
     check_suffix(bytes_per_second(512), "B/s");
     check_suffix(kilobytes_per_second(250), "kB/s");
     check_suffix(megabytes_per_second(100), "MB/s");
     check_suffix(gigabytes_per_second(2), "GB/s");
+    check_suffix(terabytes_per_second(1), "TB/s");
     check_suffix(kibibytes_per_second(64), "KiB/s");
     check_suffix(mebibytes_per_second(20), "MiB/s");
     check_suffix(gibibytes_per_second(1), "GiB/s");
+    check_suffix(tebibytes_per_second(1), "TiB/s");
 }
 
 TEST_CASE("to_string of computed quantities", "[format]") {
@@ -798,13 +827,14 @@ TEST_CASE("non-finite values are shown in the base unit or the bit family's smal
 }
 
 TEST_CASE("base-unit and scaled forms", "[format]") {
-    // SI bytes: B, kB, MB, GB
+    // SI bytes: B, kB, MB, GB, TB
     check_forms(kilobytes(1500), "1500000B", "1.5MB");
     check_forms(bytes(2048), "2048B", "2.048kB"); // B is SI
     check_forms(bytes(1500), "1500B", "1.5kB");
     check_forms(bytes(-1500), "-1500B", "-1.5kB");
     check_forms(megabytes(1500), "1500000000B", "1.5GB");
-    check_forms(gigabytes(5000), "5000000000000B", "5000GB");
+    check_forms(gigabytes(5000), "5000000000000B", "5TB");
+    check_forms(terabytes(5000), "5000000000000000B", "5000TB");
     check_forms(size<double>(0.5), "0.5B", "0.5B"); // smallest candidate
     check_forms(size<double, std::kilo>(0.25), "250B", "250B");
 
@@ -817,8 +847,11 @@ TEST_CASE("base-unit and scaled forms", "[format]") {
     check_forms(kilobytes(1000), "1000000B", "1MB");
     check_forms(megabytes(999), "999000000B", "999MB");
     check_forms(megabytes(1000), "1000000000B", "1GB");
+    check_forms(gigabytes(999), "999000000000B", "999GB");
+    check_forms(gigabytes(1000), "1000000000000B", "1TB");
+    check_forms(gigabytes(4000), "4000000000000B", "4TB");
 
-    // Bits: bit, kbit, Mbit, Gbit
+    // Bits: bit, kbit, Mbit, Gbit, Tbit
     check_forms(bits(12), "1.5B", "12bit");
     check_forms(bits(1), "0.125B", "1bit");
     check_forms(bits(-8), "-1B", "-8bit");
@@ -828,10 +861,12 @@ TEST_CASE("base-unit and scaled forms", "[format]") {
     check_forms(kilobits(1000), "125000B", "1Mbit");
     check_forms(megabits(1000), "125000000B", "1Gbit");
     check_forms(gigabits(3), "375000000B", "3Gbit");
-    check_forms(gigabits(2000), "250000000000B", "2000Gbit");
+    check_forms(gigabits(2000), "250000000000B", "2Tbit");
+    check_forms(terabits(3), "375000000000B", "3Tbit");
+    check_forms(terabits(2000), "250000000000000B", "2000Tbit");
     check_forms(size<double, std::ratio<1, 8>>(0.5), "0.0625B", "0.5bit");
 
-    // IEC bytes: B, KiB, MiB, GiB
+    // IEC bytes: B, KiB, MiB, GiB, TiB
     check_forms(kibibytes(1536), "1572864B", "1.5MiB");
     check_forms(kibibytes(-1536), "-1572864B", "-1.5MiB");
     check_forms(kibibytes(1), "1024B", "1KiB");
@@ -839,7 +874,10 @@ TEST_CASE("base-unit and scaled forms", "[format]") {
     check_forms(kibibytes(1024), "1048576B", "1MiB");
     check_forms(mebibytes(1536), "1610612736B", "1.5GiB");
     check_forms(mebibytes(1023), "1072693248B", "1023MiB");
-    check_forms(gibibytes(2048), "2199023255552B", "2048GiB");
+    check_forms(gibibytes(2048), "2199023255552B", "2TiB");
+    check_forms(gibibytes(4096), "4398046511104B", "4TiB");
+    check_forms(gibibytes(1023), "1098437885952B", "1023GiB");
+    check_forms(tebibytes(1536), "1688849860263936B", "1536TiB");
     check_forms(size<double, std::ratio<1024>>(0.5), "512B", "512B"); // the IEC family's B
     check_forms(size<double, std::ratio<1024>>(0.000244140625), "0.25B", "0.25B");
 
@@ -858,6 +896,9 @@ TEST_CASE("base-unit and scaled forms", "[format]") {
     check_forms(bits_per_second(9600), "1200B/s", "9.6kbit/s");
     check_forms(bytes_per_second(2048), "2048B/s", "2.048kB/s");
     check_forms(megabytes_per_second(1500), "1500000000B/s", "1.5GB/s");
+    check_forms(gigabits_per_second(1000), "125000000000B/s", "1Tbit/s");
+    check_forms(terabytes_per_second(2), "2000000000000B/s", "2TB/s");
+    check_forms(gibibytes_per_second(1536), "1649267441664B/s", "1.5TiB/s");
     check_forms(kibibytes_per_second(1536), "1572864B/s", "1.5MiB/s");
     check_forms(mebibytes_per_second(-20), "-20971520B/s", "-20MiB/s");
     check_forms(bits_per_second(0), "0B/s", "0bit/s");
@@ -872,18 +913,18 @@ TEST_CASE("base-unit and scaled forms", "[format]") {
 // A user symbol for another precision: shown in its own unit by every form
 // but the base unit, since it is in none of the scaled form's families
 template<>
-struct quanta::data::precision_symbol<std::tera> {
-    static constexpr const char* symbol = "TB";
+struct quanta::data::precision_symbol<std::peta> {
+    static constexpr const char* symbol = "PB";
 };
 
 TEST_CASE("a user precision symbol is shown in its own unit when scaled", "[format]") {
-    using terabytes = size<int64_t, std::tera>;
-    using terabytes_per_second = rate<int64_t, std::tera>;
-    REQUIRE(to_string(terabytes(3)) == "3TB");
-    REQUIRE(to_string(terabytes_per_second(3)) == "3TB/s");
-    check_forms(terabytes(3), "3000000000000B", "3TB");
-    check_forms(terabytes(0), "0B", "0TB");
-    check_forms(terabytes_per_second(2), "2000000000000B/s", "2TB/s");
+    using petabytes = size<int64_t, std::peta>;
+    using petabytes_per_second = rate<int64_t, std::peta>;
+    REQUIRE(to_string(petabytes(3)) == "3PB");
+    REQUIRE(to_string(petabytes_per_second(3)) == "3PB/s");
+    check_forms(petabytes(3), "3000000000000000B", "3PB");
+    check_forms(petabytes(0), "0B", "0PB");
+    check_forms(petabytes_per_second(2), "2000000000000000B/s", "2PB/s");
 }
 
 // Precisions with no symbol of their own still have a base unit, and are
