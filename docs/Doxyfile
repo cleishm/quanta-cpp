@@ -6,7 +6,7 @@
 
 DOXYFILE_ENCODING      = UTF-8
 PROJECT_NAME           = "quanta"
-PROJECT_NUMBER         = "0.1.0"
+PROJECT_NUMBER         = "0.2.0"
 PROJECT_BRIEF          = "Type-safe units for temperature, frequency, electrical, spatial and data quantities, modeled after std::chrono"
 PROJECT_LOGO           =
 OUTPUT_DIRECTORY       = .

@@ -1,4 +1,4 @@
-version: "0.1.0"
+version: "0.2.0"
 description: "Type-safe units for temperature, frequency, electrical, spatial and data quantities, modeled after std::chrono"
 url: "https://github.com/cleishm/quanta-cpp"
 repository: "https://github.com/cleishm/quanta-cpp.git"

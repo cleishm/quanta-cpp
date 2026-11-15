@@ -95,7 +95,7 @@ include(FetchContent)
 FetchContent_Declare(
     quanta
     GIT_REPOSITORY https://github.com/cleishm/quanta-cpp.git
-    GIT_TAG v0.1.0
+    GIT_TAG v0.2.0
 )
 FetchContent_MakeAvailable(quanta)
 
@@ -116,7 +116,7 @@ The library can be used as an ESP-IDF component. Add it to your project's
 
 ```yaml
 dependencies:
-  cleishm/quanta: "^0.1.0"
+  cleishm/quanta: "^0.2.0"
 ```
 
 `std::format` support is controlled by the `CONFIG_QUANTA_STD_FORMAT_SUPPORT`
