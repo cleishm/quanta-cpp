@@ -5,6 +5,7 @@
 // literals-only test below sees nothing but `using namespace quanta::literals;`.
 
 #include <catch2/catch_test_macros.hpp>
+#include <quanta/data>
 #include <quanta/decibel>
 #include <quanta/electro>
 #include <quanta/frequency>
@@ -18,6 +19,7 @@ using namespace quanta::thermo;
 using namespace quanta::frequency;
 using namespace quanta::electro;
 using namespace quanta::spatial;
+using namespace quanta::data;
 using namespace quanta::literals;
 
 static_assert(treat_as_inexact_v<double>);
@@ -29,6 +31,7 @@ TEST_CASE("literals from every domain", "[combined]") {
     CHECK(3300_mV == millivolts(3300));
     CHECK(-73_dBm == dbm(-73));
     CHECK(250_mm == millimeters(250));
+    CHECK(1500_kB == kilobytes(1500));
 }
 
 TEST_CASE("shared formatting tags", "[combined]") {
@@ -36,6 +39,7 @@ TEST_CASE("shared formatting tags", "[combined]") {
     CHECK(to_string(megahertz(2400), scaled) == "2.4GHz");
     CHECK(to_string(millivolts(3300), base_unit) == "3.3V");
     CHECK(to_string(millimeters(1500), scaled) == "1.5m");
+    CHECK(to_string(kilobytes(1500), scaled) == "1.5MB");
 }
 
 TEST_CASE("frequency to spatial wavelength", "[combined]") {
@@ -49,6 +53,7 @@ TEST_CASE("std::format from every domain", "[combined]") {
     CHECK(std::format("{}", millivolts(3300)) == "3300mV");
     CHECK(std::format("{}", dbm(-73)) == "-73dBm");
     CHECK(std::format("{}", millimeters(250)) == "250mm");
+    CHECK(std::format("{}", kilobytes(1500)) == "1500kB");
 }
 #endif
 
@@ -64,6 +69,7 @@ TEST_CASE("quanta::literals alone provides every domain's literals", "[combined]
     CHECK(3300_mV == quanta::electro::millivolts(3300));
     CHECK(-73_dBm == quanta::electro::dbm(-73));
     CHECK(250_mm == quanta::spatial::millimeters(250));
+    CHECK(1500_kB == quanta::data::kilobytes(1500));
 }
 
 // A quantity whose rep is another domain's quantity converts to nothing that
@@ -88,6 +94,7 @@ static_assert(!exposes_internals<quanta::thermo::celsius>);
 static_assert(!exposes_internals<quanta::frequency::hertz>);
 static_assert(!exposes_internals<quanta::electro::volts>);
 static_assert(!exposes_internals<quanta::spatial::meters>);
+static_assert(!exposes_internals<quanta::data::bytes>);
 #endif
 
 // A rep constructible only explicitly from double (a fixed-point type) is
@@ -122,6 +129,9 @@ static_assert(explicit_only<
               quanta::spatial::length<fixed>,
               quanta::spatial::length<double>,
               quanta::spatial::length<double, std::milli>>);
+static_assert(
+    explicit_only<quanta::data::size<fixed>, quanta::data::size<double>, quanta::data::size<double, std::milli>>
+);
 
 TEST_CASE("explicit conversion to an explicit-only rep", "[combined]") {
     CHECK(double(quanta::thermo::delta<fixed>(quanta::thermo::delta<double>(-0.5)).count()) == -0.5);

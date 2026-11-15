@@ -4,6 +4,20 @@ All notable changes to **quanta** are documented in this file.
 
 The library follows [semantic versioning](https://semver.org/).
 
+## Unreleased
+
+### Additions
+
+- `quanta::data` (`<quanta/data>`) — data sizes and rates in bits, SI bytes
+  (kB, MB, GB, TB) and IEC bytes (KiB, MiB, GiB, TiB), as exact ratios of the
+  byte, with `std::chrono` interop (`size / duration = rate`)
+
+### Changes
+
+- electro, spatial and data now format precisions with no unit symbol (such as
+  `1_mm + 1_in` or `1_kB + 1_KiB`) with `{:b}`, `{:s}` and marker-less specs,
+  as frequency does; `{}` and `to_string(q)` still need a named precision
+
 ## v0.1.0
 
 First release. quanta merges four libraries — thermo-cpp, frequency-cpp,

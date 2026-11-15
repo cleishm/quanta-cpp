@@ -113,7 +113,8 @@ public:
     /**
      * @brief Constructs from a tick count.
      *
-     * Implicit for inexact types, explicit otherwise to prevent accidental
+     * Explicit, as in std::chrono::duration. A floating-point (inexact) count
+     * is accepted only when rep is inexact too, to prevent accidental
      * precision loss.
      *
      * @tparam Rep2 The source representation type.
@@ -572,14 +573,10 @@ struct _format_traits {
     static constexpr const char* markers = "bs";
     static constexpr bool has_own_unit = Traits::prefix != nullptr;
 
-    // Reports "{}" for a precision with no own unit. The parameter only gives
-    // the function a path that is a constant expression, as a constexpr
-    // function needs; the formatter always calls it with true.
-    static constexpr void no_own_unit_error(bool fail = true) {
-        if (fail) {
-            _format_error("thermo: precision has no SI prefix; use an explicit format spec");
-        }
-    }
+    // The format error message for "{}" on a precision with no own unit; see
+    // detail::_no_own_unit_error.
+    static constexpr const char* no_own_unit_message =
+        "thermo: precision has no SI prefix; use an explicit format spec";
 
     // The own unit is written from constants; there is nothing to obtain.
     static constexpr bool own_unit(bool power) { return power; }

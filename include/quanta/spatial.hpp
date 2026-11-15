@@ -248,7 +248,8 @@ public:
     /**
      * @brief Constructs from a tick count.
      *
-     * Implicit for inexact types, explicit otherwise to prevent accidental
+     * Explicit, as in std::chrono::duration. A floating-point (inexact) count
+     * is accepted only when rep is inexact too, to prevent accidental
      * precision loss.
      *
      * @tparam Rep2 The source representation type.
@@ -878,8 +879,9 @@ struct si_prefix<std::tera> {
  * power-form suffix (the precision written as a power of a length unit, as
  * selected by to_string(q, power_form) or the `p` format marker). When
  * `power_value()` is absent the power form is the same as `value()`. A
- * (unit, precision) pair without `value()` has no suffix, and quantities of
- * it cannot be converted to strings or formatted.
+ * (unit, precision) pair without `value()` has no suffix: quantities of it
+ * have no to_string(q) or `{}` form, and are shown only in the base-unit and
+ * scaled forms, or with a format spec (which renders in the base unit).
  *
  * For lengths, the primary template combines an SI prefix with the unit
  * symbol (e.g. "mm", "km") and is only usable when the precision is a
@@ -900,7 +902,8 @@ struct si_prefix<std::tera> {
  * The base-unit and scaled forms (see base_unit and scaled) do not use these
  * suffixes for metric precisions, i.e. those that are powers of ten of the
  * base unit: they compute the value in the base unit or in a unit chosen by
- * magnitude. The scaled form shows other precisions with value().
+ * magnitude. The scaled form shows other precisions with value(), or, where
+ * they have none, as metric ones.
  *
  * @tparam Unit      The unit tag type.
  * @tparam Precision The (reduced) precision ratio.
@@ -1152,31 +1155,50 @@ _display _base_unit_display(const quantity<Unit, Rep, Precision>& q) {
 // The quantity in the largest candidate unit in which its magnitude is at
 // least 1, else the smallest; zero (keeping its sign) and non-finite values
 // are shown in the base unit, as the base-unit form would show them. Non-metric
-// precisions are shown in their own unit. Each candidate's value is computed
-// from the count with a single scaling by a power of ten, so values that
-// land exactly on a unit (1000 mm) are exactly 1 in it.
+// precisions are shown in their own unit, or, where they have none, scaled
+// from their value in the base unit. For a metric precision each candidate's
+// value is computed from the count with a single scaling by a power of ten,
+// so values that land exactly on a unit (1000 mm) are exactly 1 in it. Units
+// without candidates are shown in their own unit, else in the base unit.
 template<typename Unit, typename Rep, typename Precision>
 _display _scaled_display(const quantity<Unit, Rep, Precision>& q) {
     using p = typename Precision::type;
     const double count = static_cast<double>(q.count());
-    if constexpr (_metric_precision<p> && requires { _scale_units<Unit>::values; }) {
-        if (count == 0 || !std::isfinite(count)) {
-            return {count, Unit::symbol};
+    if constexpr ((_metric_precision<p> || !_has_suffix<Unit, p>) && requires { _scale_units<Unit>::values; }) {
+        double x;
+        int exponent;
+        if constexpr (_metric_precision<p>) {
+            x = count;
+            exponent = _precision_exponent<p>;
+        } else {
+            x = detail::_ratio_value<p>(q.count());
+            exponent = 0;
         }
-        const detail::_scaled s = detail::_pick_scale(count, _precision_exponent<p>, _scale_units<Unit>::values);
+        if (x == 0 || !std::isfinite(x)) {
+            return {x, Unit::symbol};
+        }
+        const detail::_scaled s = detail::_pick_scale(x, exponent, _scale_units<Unit>::values);
         return {s.value, s.label};
-    } else {
+    } else if constexpr (_has_suffix<Unit, p>) {
         return {count, quantity_suffix<Unit, p>::value()};
+    } else {
+        return _base_unit_display(q);
     }
 }
 
 #if CONFIG_QUANTA_STD_FORMAT
 // How std::format renders a quantity of the given unit and (reduced)
-// precision, with the power form ('p'); see detail::_unit_formatter.
+// precision, with the power form ('p'); see detail::_unit_formatter. A
+// precision with no suffix has no own unit, in either form.
 template<typename Unit, typename Precision>
 struct _format_traits {
     static constexpr const char* markers = "pbs";
-    static constexpr bool has_own_unit = true;
+    static constexpr bool has_own_unit = _has_suffix<Unit, Precision>;
+
+    // The format error message for "{}" (or "{:p}") on a precision with no own
+    // unit; see detail::_no_own_unit_error.
+    static constexpr const char* no_own_unit_message =
+        "spatial: precision has no unit suffix; use an explicit format spec";
 
     static std::string own_unit(bool power) {
         const std::string suffix = power ? _power_suffix<Unit, Precision>() : quantity_suffix<Unit, Precision>::value();
@@ -1256,8 +1278,10 @@ using quanta::base_unit_t;
  * or the smallest of the set if there is none; zero is shown in the base
  * unit. The units are nm, µm, mm, m and km for lengths; nm², µm², mm², m²
  * and km² for areas; and µL, mL, L and m³ for volumes. Other quantities
- * (mil, in, ft, acres, gallons, ...) are shown in their own unit. The value
- * is rendered in the shortest fixed notation that round-trips (never
+ * (mil, in, ft, acres, gallons, ...) are shown in their own unit; those with
+ * no suffix (such as the 0.2 mm common type of meters and inches) are scaled
+ * from their value in the base unit to the same units as metric ones. The
+ * value is rendered in the shortest fixed notation that round-trips (never
  * scientific), exactly as by the `s` format marker.
  *
  * @code
@@ -1315,7 +1339,8 @@ inline std::string to_string(const quantity<Unit, Rep, Precision>& q, power_form
 /**
  * @brief Converts a quantity to a string in its base unit (m, m² or m³).
  *
- * Available for the same quantities as to_string(q); see base_unit.
+ * Available for the same quantities as to_string(q), and for precisions with
+ * no suffix of their own; see base_unit.
  *
  * @code
  * to_string(millimeters(1500), base_unit);  // "1.5m"
@@ -1323,7 +1348,7 @@ inline std::string to_string(const quantity<Unit, Rep, Precision>& q, power_form
  * @endcode
  */
 template<typename Unit, typename Rep, typename Precision>
-    requires _has_suffix<Unit, typename Precision::type>
+    requires detail::_formattable<quantity_suffix, Unit, typename Precision::type>
 inline std::string to_string(const quantity<Unit, Rep, Precision>& q, base_unit_t) {
     const _display d = _base_unit_display(q);
     return _fixed_string(d.value) + d.suffix;
@@ -1332,7 +1357,8 @@ inline std::string to_string(const quantity<Unit, Rep, Precision>& q, base_unit_
 /**
  * @brief Converts a quantity to a string in a unit scaled to its magnitude.
  *
- * Available for the same quantities as to_string(q); see scaled.
+ * Available for the same quantities as to_string(q), and for precisions with
+ * no suffix of their own; see scaled.
  *
  * @code
  * to_string(millimeters(1500), scaled);  // "1.5m"
@@ -1340,7 +1366,7 @@ inline std::string to_string(const quantity<Unit, Rep, Precision>& q, base_unit_
  * @endcode
  */
 template<typename Unit, typename Rep, typename Precision>
-    requires _has_suffix<Unit, typename Precision::type>
+    requires detail::_formattable<quantity_suffix, Unit, typename Precision::type>
 inline std::string to_string(const quantity<Unit, Rep, Precision>& q, scaled_t) {
     const _display d = _scaled_display(q);
     return _fixed_string(d.value) + d.suffix;
@@ -1387,8 +1413,14 @@ public:
 // A spec starting with 'p', 'b' or 's' is always a marker, so these letters
 // cannot be the fill character of a spec that starts with a fill
 // ("{:p>10.1f}" is the marker followed by ">10.1f").
+//
+// A precision with no suffix (e.g. the 0.2 mm common type of meters and
+// inches) has no unit of its own: "{}" and "{:p}" are format errors (a compile
+// error for a constant format string), and a spec without a marker, or with
+// only 'p', renders the value in the base unit, as 'b' does:
+// std::format("{:.2f}", length<int64_t, std::ratio<8>>(5)) == "40.00m".
 template<typename Unit, typename Rep, typename Precision>
-    requires quanta::spatial::_has_suffix<Unit, typename Precision::type>
+    requires quanta::detail::_formattable<quanta::spatial::quantity_suffix, Unit, typename Precision::type>
 struct formatter<quanta::spatial::quantity<Unit, Rep, Precision>, char>
     : private quanta::detail::_unit_formatter<quanta::spatial::_format_traits<Unit, typename Precision::type>> {
     using quanta::detail::_unit_formatter<quanta::spatial::_format_traits<Unit, typename Precision::type>>::parse;

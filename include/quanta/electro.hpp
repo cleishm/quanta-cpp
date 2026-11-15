@@ -262,7 +262,8 @@ public:
     /**
      * @brief Constructs from a tick count.
      *
-     * Implicit for inexact types, explicit otherwise to prevent accidental
+     * Explicit, as in std::chrono::duration. A floating-point (inexact) count
+     * is accepted only when rep is inexact too, to prevent accidental
      * precision loss.
      *
      * @tparam Rep2 The source representation type.
@@ -1114,6 +1115,8 @@ struct quantity_suffix<joule_unit, std::ratio<3600000>> {
     static std::string value() { return "kWh"; }
 };
 
+// Decibels opt out of the suffixes, so they have neither a suffix nor a
+// base-unit and scaled form (see detail::_formattable).
 template<typename Unit, typename Precision>
 concept _has_suffix = requires { quantity_suffix<Unit, Precision>::value(); };
 
@@ -1155,13 +1158,16 @@ struct _display {
     std::string suffix;
 };
 
+// The base units (see _base_display_unit) per count of a (reduced) precision.
+template<typename Unit, typename Precision>
+using _base_units_per_count =
+    typename std::ratio_divide<Precision, typename _base_display_unit<Unit, Precision>::scale>::type;
+
 // The quantity in its base unit (see _base_display_unit), as a double.
 template<typename Unit, typename Rep, typename Precision>
 _display _base_unit_display(const quantity<Unit, Rep, Precision>& q) {
-    using display = _base_display_unit<Unit, typename Precision::type>;
-    // display units per count
-    using upc = typename std::ratio_divide<typename Precision::type, typename display::scale>::type;
-    return {detail::_ratio_value<upc>(q.count()), display::suffix};
+    using p = typename Precision::type;
+    return {detail::_ratio_value<_base_units_per_count<Unit, p>>(q.count()), _base_display_unit<Unit, p>::suffix};
 }
 
 // Precisions that are SI prefixes (see si_prefix) of the unit.
@@ -1170,20 +1176,31 @@ concept _si_precision = requires { si_prefix<Precision>::symbol; } && detail::_p
 
 // The quantity with the largest SI prefix for which its magnitude is at least
 // 1, else the smallest; zero (keeping its sign) and non-finite values are
-// shown in the unprefixed unit. Each candidate's value is computed from the
-// count with a single scaling by a power of ten, so values that land exactly
-// on a prefix (1000 mV) are exactly 1 in it. Precisions that are not SI
+// shown in the unprefixed unit. For a power-of-ten precision each candidate's
+// value is computed from the count with a single scaling by a power of ten,
+// so values that land exactly on a prefix (1000 mV) are exactly 1 in it;
+// precisions with no suffix that are not powers of ten are scaled from their
+// value in the unprefixed unit. Precisions with a suffix that are not SI
 // prefixes (mAh, Ah, Wh, kWh) are shown in their own unit.
 template<typename Unit, typename Rep, typename Precision>
 _display _scaled_display(const quantity<Unit, Rep, Precision>& q) {
     using p = typename Precision::type;
     const double count = static_cast<double>(q.count());
-    if constexpr (_si_precision<p>) {
-        if (count == 0 || !std::isfinite(count)) {
+    if constexpr (_si_precision<p> || !_has_suffix<Unit, p>) {
+        double x;
+        int exponent;
+        if constexpr (detail::_power_of_ten_precision<p>) {
+            x = count;
+            exponent = _precision_exponent<p>;
+        } else {
+            x = detail::_ratio_value<_base_units_per_count<Unit, p>>(q.count());
+            exponent = 0;
+        }
+        if (x == 0 || !std::isfinite(x)) {
             return _base_unit_display(q);
         }
         // The si_prefix set, femto to tera
-        const detail::_scaled s = detail::_pick_scale(count, _precision_exponent<p>, detail::_si_scale);
+        const detail::_scaled s = detail::_pick_scale(x, exponent, detail::_si_scale);
         return {s.value, std::string(s.label) + Unit::symbol};
     } else {
         return {count, quantity_suffix<Unit, p>::value()};
@@ -1192,11 +1209,17 @@ _display _scaled_display(const quantity<Unit, Rep, Precision>& q) {
 
 #if CONFIG_QUANTA_STD_FORMAT
 // How std::format renders a quantity of the given unit and (reduced)
-// precision; see detail::_unit_formatter.
+// precision; see detail::_unit_formatter. A precision with no suffix has no
+// own unit.
 template<typename Unit, typename Precision>
 struct _format_traits {
     static constexpr const char* markers = "bs";
-    static constexpr bool has_own_unit = true;
+    static constexpr bool has_own_unit = _has_suffix<Unit, Precision>;
+
+    // The format error message for "{}" on a precision with no own unit; see
+    // detail::_no_own_unit_error.
+    static constexpr const char* no_own_unit_message =
+        "electro: precision has no unit suffix; use an explicit format spec";
 
     static std::string own_unit(bool) {
         const std::string suffix = quantity_suffix<Unit, Precision>::value();
@@ -1252,9 +1275,11 @@ using quanta::base_unit_t;
  * Quantities whose precision is an SI prefix are shown with the largest
  * prefix from femto to tera (see si_prefix) for which the magnitude is at
  * least 1, or with femto if there is none; zero is shown in the unprefixed
- * unit. Quantities at the hour-based precisions (mAh, Ah, Wh, kWh) are shown
- * in their own unit. The value is rendered in the shortest fixed notation
- * that round-trips (never scientific), exactly as by the `s` format marker.
+ * unit. The same applies to precisions with no suffix of their own, such as
+ * 10⁻⁵ V (volts_e5 below). Quantities at the hour-based precisions (mAh, Ah,
+ * Wh, kWh) are shown in their own unit. The value is rendered in the shortest
+ * fixed notation that round-trips (never scientific), exactly as by the `s`
+ * format marker.
  *
  * @code
  * to_string(millivolts(3300), scaled);        // "3.3V"
@@ -1262,6 +1287,8 @@ using quanta::base_unit_t;
  * to_string(microamperes(-2500), scaled);     // "-2.5mA"
  * to_string(picofarads(100000), scaled);      // "100nF"
  * to_string(milliampere_hours(2500), scaled); // "2500mAh"
+ * using volts_e5 = quantity<volt_unit, int64_t, std::ratio<1, 100000>>;
+ * to_string(volts_e5(165000), scaled);        // "1.65V"
  * @endcode
  */
 using quanta::scaled;
@@ -1291,7 +1318,8 @@ inline std::string to_string(const quantity<Unit, Rep, Precision>& q) {
 /**
  * @brief Converts a quantity to a string in its base unit.
  *
- * Available for the same quantities as to_string(q); see base_unit.
+ * Available for the same quantities as to_string(q), and for precisions with
+ * no suffix of their own (shown in the unprefixed unit); see base_unit.
  *
  * @code
  * to_string(millivolts(3300), base_unit);       // "3.3V"
@@ -1299,7 +1327,7 @@ inline std::string to_string(const quantity<Unit, Rep, Precision>& q) {
  * @endcode
  */
 template<typename Unit, typename Rep, typename Precision>
-    requires _has_suffix<Unit, typename Precision::type>
+    requires detail::_formattable<quantity_suffix, Unit, typename Precision::type>
 inline std::string to_string(const quantity<Unit, Rep, Precision>& q, base_unit_t) {
     const _display d = _base_unit_display(q);
     return _fixed_string(d.value) + d.suffix;
@@ -1308,7 +1336,8 @@ inline std::string to_string(const quantity<Unit, Rep, Precision>& q, base_unit_
 /**
  * @brief Converts a quantity to a string with an SI prefix suited to its magnitude.
  *
- * Available for the same quantities as to_string(q); see scaled.
+ * Available for the same quantities as to_string(q), and for precisions with
+ * no suffix of their own; see scaled.
  *
  * @code
  * to_string(millivolts(3300), scaled);  // "3.3V"
@@ -1316,7 +1345,7 @@ inline std::string to_string(const quantity<Unit, Rep, Precision>& q, base_unit_
  * @endcode
  */
 template<typename Unit, typename Rep, typename Precision>
-    requires _has_suffix<Unit, typename Precision::type>
+    requires detail::_formattable<quantity_suffix, Unit, typename Precision::type>
 inline std::string to_string(const quantity<Unit, Rep, Precision>& q, scaled_t) {
     const _display d = _scaled_display(q);
     return _fixed_string(d.value) + d.suffix;
@@ -1361,8 +1390,13 @@ public:
 // A spec starting with 'b' or 's' is always a marker, so these letters cannot
 // be the fill character of a spec that starts with a fill ("{:b>8.1f}" is the
 // marker followed by ">8.1f").
+//
+// A precision with no suffix (e.g. 10⁻⁵ V) has no unit of its own: "{}" is a
+// format error (a compile error for a constant format string), and a spec
+// without a marker renders the value in the unprefixed unit, as 'b' does:
+// std::format("{:.2f}", quantity<volt_unit, int64_t, std::ratio<1, 100000>>(165000)) == "1.65V".
 template<typename Unit, typename Rep, typename Precision>
-    requires quanta::electro::_has_suffix<Unit, typename Precision::type>
+    requires quanta::detail::_formattable<quanta::electro::quantity_suffix, Unit, typename Precision::type>
 struct formatter<quanta::electro::quantity<Unit, Rep, Precision>, char>
     : private quanta::detail::_unit_formatter<quanta::electro::_format_traits<Unit, typename Precision::type>> {
     using quanta::detail::_unit_formatter<quanta::electro::_format_traits<Unit, typename Precision::type>>::parse;
