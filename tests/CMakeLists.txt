@@ -24,13 +24,14 @@ quanta_add_tests(frequency frequency/frequency_test.cpp)
 quanta_add_tests(electro electro/electro_test.cpp electro/decibel_test.cpp)
 quanta_add_tests(spatial spatial/spatial_test.cpp)
 quanta_add_tests(proportion proportion/proportion_test.cpp)
+quanta_add_tests(data data/data_test.cpp)
 
 # The formatters must also build with exceptions disabled, as on embedded
 # targets. Catch2 requires exceptions, so these are standalone targets. MSVC
 # spells the option differently and still declares __cpp_exceptions, so the
 # check is limited to compilers taking -fno-exceptions.
 if(NOT MSVC)
-    foreach(domain thermo frequency spatial proportion)
+    foreach(domain thermo frequency spatial proportion data)
         add_executable(${domain}_no_exceptions_test ${domain}/no_exceptions_test.cpp)
         target_link_libraries(${domain}_no_exceptions_test PRIVATE quanta::quanta)
         target_compile_options(${domain}_no_exceptions_test PRIVATE -fno-exceptions -Wall -Wextra -Wpedantic -Wshadow)
