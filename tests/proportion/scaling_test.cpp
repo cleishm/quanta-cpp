@@ -250,3 +250,10 @@ TEST_CASE("scaling with floating-point reps", "[proportion][scaling][floating-po
     CHECK(electro::quantity_cast<electro::voltage<double, std::milli>>(mv).count() == Catch::Approx(412.5));
     CHECK(electro::quantity_cast<electro::millivolts>(mv) == 412_mV);
 }
+
+#if CONFIG_QUANTA_STD_FORMAT
+TEST_CASE("formatting a scaled quantity", "[proportion][scaling][format]") {
+    // The result's precision has no unit of its own, but is shown scaled
+    CHECK(std::format("{:s}", 3300_mV * 50_pct) == "1.65V");
+}
+#endif

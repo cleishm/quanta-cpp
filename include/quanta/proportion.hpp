@@ -594,14 +594,19 @@ constexpr auto operator<=>(const proportion<Rep1, Precision1>& lhs, const propor
  *
  * The result is the same kind of quantity. Counts multiply and precisions
  * multiply, as in a product of two proportions, so no conversion factor is
- * needed and the result is exact for integer representations; convert it to a
- * named precision when needed, explicitly where that loses precision. A
- * product whose precision cannot be represented as a std::ratio is a
- * compile-time error.
+ * needed and the result is exact for integer representations. A product whose
+ * precision cannot be represented as a std::ratio is a compile-time error.
+ *
+ * The result's precision usually has no unit symbol. It is shown in the
+ * base-unit and scaled forms (the `b` and `s` format markers, and the
+ * base_unit and scaled to_string() tags), and in the base unit with any other
+ * format spec; `{}` and to_string(q) need a named precision, to which it
+ * converts explicitly where that loses precision.
  *
  * @code
  * auto v = 3300_mV * 50_pct;  // quantity<volt_unit, int64_t, std::ratio<1, 100000>>(165000), 1.65 V
- * millivolts mv(v);           // 1650 mV (explicit: a coarser precision)
+ * std::format("{:s}", v);     // "1.65V"
+ * millivolts mv(v);           // 1650 mV (explicit: a coarser precision), "1650mV" with {}
  * auto d = 20_ppm * 1000_m;   // 20 mm, at precision 1/1000000 m
  * @endcode
  */

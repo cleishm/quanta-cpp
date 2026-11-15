@@ -328,6 +328,8 @@ values (infinity, NaN) in the base unit:
 
 Other precisions (mil, in, ft, yd, mi, nmi, their squares and cubes, acres and
 US gallons) are shown in their own unit, with the count as a `double`.
+Precisions with no suffix are scaled to the same units as metric ones (see
+below).
 
 ```cpp
 std::format("{}", 24_mL);                    // "24mL"
@@ -353,6 +355,18 @@ the marker followed by `>8.1f`, not right-alignment filled with `p`. Only one
 marker is allowed; a second one is passed on as part of the numeric spec and
 is a format error.
 
-Precisions with no conventional suffix (such as the 0.2 mm common type of
-`meters` and `inches`, or the 10⁻³ m² area of `meters × millimeters`) are not
-formattable, with or without a marker; convert them to a named precision first.
+A precision with no conventional suffix (such as the 0.2 mm common type of
+`meters` and `inches`, the 10⁻³ m² area of `meters × millimeters`, or the
+result of scaling by a proportion) has no unit of its own: `{}`, `{:p}`,
+`to_string(q)` and `to_string(q, power_form)` do not compile for it, and a spec
+without a marker, or with only `p`, renders the value in the base unit. The `b`
+and `s` markers and tags work for it, `s` scaling from the base-unit value to
+the metric units above:
+
+```cpp
+std::format("{:b}", 1_m + 1_in);             // "1.0254m"
+std::format("{:.2f}", 1_m + 1_in);           // "1.03m"
+std::format("{:s}", 1_mm + 1_in);            // "26.4mm"
+std::format("{:s}", 1_m * 25_mm);            // "25000mm²"
+to_string(1_m + 1_in, quanta::spatial::scaled); // "1.0254m"
+```

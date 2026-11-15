@@ -14,6 +14,20 @@ using namespace quanta::electro_literals;
 // Compile-time tests (static_assert)
 // =============================================================================
 
+// A gain has no base unit, so precisions without a symbol stay unformattable:
+// neither the base-unit nor the scaled form applies to it.
+template<typename Q>
+concept has_base_to_string = requires(Q q) { to_string(q, base_unit); };
+template<typename Q>
+concept has_scaled_to_string = requires(Q q) { to_string(q, scaled); };
+static_assert(!has_base_to_string<gain<int64_t, std::ratio<1, 3>>>);
+static_assert(!has_scaled_to_string<gain<int64_t, std::ratio<1, 3>>>);
+static_assert(!has_base_to_string<gain<int64_t, std::ratio<10>>>);
+#if CONFIG_QUANTA_STD_FORMAT
+static_assert(!std::is_default_constructible_v<std::formatter<gain<int64_t, std::ratio<1, 3>>, char>>);
+static_assert(!std::is_default_constructible_v<std::formatter<gain<int64_t, std::ratio<10>>, char>>);
+#endif
+
 // Construction and count
 static_assert(decibels(10).count() == 10);
 static_assert(dbm(-73).count() == -73);

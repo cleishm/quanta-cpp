@@ -120,12 +120,16 @@ of quantity:
 
 No domain header needs `<quanta/proportion>` for this; include it alongside the domain's header. As in a
 product of two proportions, counts multiply and precisions multiply, so the result is exact for integer
-representations. Its precision is usually one with no unit symbol, so convert it to a named precision
-to format it, explicitly where that loses precision:
+representations. Its precision is usually one with no unit symbol: the `b` and `s` format markers (and
+the `base_unit` and `scaled` tags of `to_string`) show it in the base unit or scaled, and any other spec
+shows it in the base unit, but `{}` and `to_string(q)` need a named precision, so convert it to one
+first, explicitly where that loses precision:
 
 ```cpp
 auto v = 3300_mV * 50_pct;        // quantity<volt_unit, int64_t, std::ratio<1, 100000>>(165000), 1.65 V
-millivolts mv(v);                 // 1650 mV (explicit: a coarser precision)
+std::format("{:s}", v);           // "1.65V"
+std::format("{:b.3f}", v);        // "1.650V"
+millivolts mv(v);                 // 1650 mV (explicit: a coarser precision); {} gives "1650mV"
 auto drift = 2400_MHz * 20_ppm;   // 48 kHz, as hertz
 auto share = 50_pct * 10_MB;      // 5 MB, at precision 10000 B
 auto rise = delta_celsius(10) * 25_pct;  // 2.5 °C, at precision 1/100 °C

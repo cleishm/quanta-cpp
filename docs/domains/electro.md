@@ -92,6 +92,13 @@ to_string(ohms(4700), scaled);                  // "4.7kΩ"
   their own unit.
 - A spec beginning with `b` or `s` is always a marker, so those letters cannot
   be used as the fill character at the start of a spec.
+- A precision with no suffix (such as the 10⁻⁵ V of `3300_mV * 50_pct`) has
+  no unit of its own: `{}` and `to_string(q)` do not compile for it, and a
+  spec without a marker renders the value in the unprefixed unit
+  (`{:.2f}` → `"1.65V"`). The `b` and `s` markers and tags work for it, `s`
+  with the same SI prefixes (`{:s}` → `"1.65V"`). Charge and energy at such
+  precisions are shown in C and J, not Ah and Wh: `200_mAh * 50_pct` is
+  `"360C"` under `b` and `s`.
 - Decibel gains and levels always render in dB (or their reference, such as
   dBm); `b` and `s` are accepted and leave the unit unchanged.
 - To show a quantity in some other unit, cast it first, e.g.

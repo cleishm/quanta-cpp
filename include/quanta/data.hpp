@@ -853,8 +853,9 @@ struct precision_symbol<gibibytes::precision> {
  * @brief Trait giving the display suffix for a (unit, precision) pair.
  *
  * A specialization provides `static std::string value()`, the suffix. A
- * (unit, precision) pair without `value()` has no suffix, and quantities of
- * it cannot be converted to strings or formatted.
+ * (unit, precision) pair without `value()` has no suffix: quantities of it
+ * have no to_string(q) or `{}` form, and are shown only in the base-unit and
+ * scaled forms, or with a format spec (which renders in the base unit).
  *
  * For sizes the suffix is the precision's symbol (see precision_symbol), and
  * for rates the symbol followed by "/s" ("kbit/s", "KiB/s"), so only the
@@ -865,7 +866,7 @@ struct precision_symbol<gibibytes::precision> {
  * The base-unit and scaled forms (see base_unit and scaled) do not use these
  * suffixes for the precisions of the standard aliases: they compute the value
  * in the base unit or in a unit chosen by magnitude. The scaled form shows
- * other precisions with value().
+ * other precisions with value(), or, where they have none, in SI bytes.
  *
  * @tparam Unit      The unit tag type.
  * @tparam Precision The (reduced) precision ratio.
@@ -895,6 +896,11 @@ struct quantity_suffix<byte_per_second_unit, Precision> {
 template<typename Unit, typename Precision>
 concept _has_suffix = requires { quantity_suffix<Unit, Precision>::value(); };
 
+// Pairs with a base-unit and scaled form: those with a suffix, and those of a
+// unit whose base unit has one (B or B/s), whatever their precision.
+template<typename Unit, typename Precision>
+concept _formattable = _has_suffix<Unit, Precision> || _has_suffix<Unit, std::ratio<1>>;
+
 // A value and suffix to display, for the base-unit and scaled forms.
 struct _display {
     double value;
@@ -904,7 +910,7 @@ struct _display {
 // The units the scaled form chooses between for a precision: the bit units
 // (bit, kbit, Mbit, Gbit), the SI byte units (B, kB, MB, GB) or the IEC byte
 // units (B, KiB, MiB, GiB). Precisions outside these families render in their
-// own unit.
+// own unit, or, where they have none, in SI bytes.
 enum class _scale_family { own, bit, si, iec };
 
 template<typename Precision>
@@ -987,17 +993,27 @@ _display _base_unit_display(const quantity<Unit, Rep, Precision>& q) {
 // The quantity in the largest unit of its precision's family in which its
 // magnitude is at least 1, else the smallest; zero (keeping its sign) and
 // non-finite values are shown in the family's smallest unit (bit or bit/s for
-// the bit family, else the base unit B or B/s). Precisions outside the families are shown in their own unit.
-// Each candidate's value is computed from the count with a single scaling by
-// a power of ten (or of two, for the IEC family), so values that land exactly
-// on a unit (1000 kB) are exactly 1 in it.
+// the bit family, else the base unit B or B/s). Precisions outside the
+// families are shown in their own unit, or, where they have none, in the SI
+// byte units. Each candidate's value is computed from the count with a single
+// scaling by a power of ten (or of two, for the IEC family), so values that
+// land exactly on a unit (1000 kB) are exactly 1 in it; a precision with no
+// symbol that is not a power of ten is scaled from its value in the base unit.
 template<typename Unit, typename Rep, typename Precision>
 _display _scaled_display(const quantity<Unit, Rep, Precision>& q) {
     using p = typename Precision::type;
-    constexpr _scale_family family = _family_of<p>;
+    constexpr _scale_family family =
+        _family_of<p> == _scale_family::own && !_has_suffix<Unit, p> ? _scale_family::si : _family_of<p>;
     const double count = static_cast<double>(q.count());
     if constexpr (family == _scale_family::own) {
         return {count, quantity_suffix<Unit, p>::value()};
+    } else if constexpr (family == _scale_family::si && !detail::_power_of_ten_precision<p>) {
+        const double x = _base_unit_display(q).value;
+        if (x == 0 || !std::isfinite(x)) {
+            return {x, Unit::symbol};
+        }
+        const detail::_scaled s = detail::_pick_scale(x, 0, _scale_units<Unit>::si);
+        return {s.value, s.label};
     } else {
         if (count == 0 || !std::isfinite(count)) {
             if constexpr (family == _scale_family::bit) {
@@ -1023,11 +1039,21 @@ _display _scaled_display(const quantity<Unit, Rep, Precision>& q) {
 
 #if CONFIG_QUANTA_STD_FORMAT
 // How std::format renders a quantity of the given unit and (reduced)
-// precision; see detail::_unit_formatter.
+// precision; see detail::_unit_formatter. A precision with no symbol has no
+// own unit.
 template<typename Unit, typename Precision>
 struct _format_traits {
     static constexpr const char* markers = "bs";
-    static constexpr bool has_own_unit = true;
+    static constexpr bool has_own_unit = _has_suffix<Unit, Precision>;
+
+    // Reports "{}" for a precision with no own unit. The parameter only gives
+    // the function a path that is a constant expression, as a constexpr
+    // function needs; the formatter always calls it with true.
+    static constexpr void no_own_unit_error(bool fail = true) {
+        if (fail) {
+            _format_error("data: precision has no unit symbol; use an explicit format spec");
+        }
+    }
 
     static std::string own_unit(bool) {
         const std::string suffix = quantity_suffix<Unit, Precision>::value();
@@ -1084,9 +1110,10 @@ using quanta::base_unit_t;
  * the precision: bit, kbit, Mbit and Gbit for the bit precisions; B, kB, MB
  * and GB for bytes and the SI-prefixed precisions; and B, KiB, MiB and GiB
  * for the IEC-prefixed precisions. Rates use the same units per second. Other
- * precisions are shown in their own unit. The value is rendered in the
- * shortest fixed notation that round-trips (never scientific), exactly as by
- * the `s` format marker.
+ * precisions are shown in their own unit, or, where they have no symbol (such
+ * as the 8 B common type of kilobytes and kibibytes), in B, kB, MB and GB. The
+ * value is rendered in the shortest fixed notation that round-trips (never
+ * scientific), exactly as by the `s` format marker.
  *
  * @code
  * to_string(kilobytes(1500), scaled);            // "1.5MB"
@@ -1123,7 +1150,8 @@ inline std::string to_string(const quantity<Unit, Rep, Precision>& q) {
 /**
  * @brief Converts a quantity to a string in its base unit (B or B/s).
  *
- * Available for the same quantities as to_string(q); see base_unit.
+ * Available for the same quantities as to_string(q), and for precisions with
+ * no symbol of their own; see base_unit.
  *
  * @code
  * to_string(kilobits(3), base_unit);     // "375B"
@@ -1131,7 +1159,7 @@ inline std::string to_string(const quantity<Unit, Rep, Precision>& q) {
  * @endcode
  */
 template<typename Unit, typename Rep, typename Precision>
-    requires _has_suffix<Unit, typename Precision::type>
+    requires _formattable<Unit, typename Precision::type>
 inline std::string to_string(const quantity<Unit, Rep, Precision>& q, base_unit_t) {
     const _display d = _base_unit_display(q);
     return _fixed_string(d.value) + d.suffix;
@@ -1140,7 +1168,8 @@ inline std::string to_string(const quantity<Unit, Rep, Precision>& q, base_unit_
 /**
  * @brief Converts a quantity to a string in a unit scaled to its magnitude.
  *
- * Available for the same quantities as to_string(q); see scaled.
+ * Available for the same quantities as to_string(q), and for precisions with
+ * no symbol of their own; see scaled.
  *
  * @code
  * to_string(kilobytes(1500), scaled);   // "1.5MB"
@@ -1148,7 +1177,7 @@ inline std::string to_string(const quantity<Unit, Rep, Precision>& q, base_unit_
  * @endcode
  */
 template<typename Unit, typename Rep, typename Precision>
-    requires _has_suffix<Unit, typename Precision::type>
+    requires _formattable<Unit, typename Precision::type>
 inline std::string to_string(const quantity<Unit, Rep, Precision>& q, scaled_t) {
     const _display d = _scaled_display(q);
     return _fixed_string(d.value) + d.suffix;
@@ -1206,8 +1235,15 @@ public:
 // A spec starting with 'b' or 's' is always a marker, so these letters cannot
 // be the fill character of a spec that starts with a fill ("{:s>10.1f}" is
 // the marker followed by ">10.1f").
+//
+// A precision with no symbol (e.g. the 8 B common type of kilobytes and
+// kibibytes) has no unit of its own: "{}" is a format error (a compile error
+// for a constant format string), a spec without a marker renders the value in
+// B or B/s, as 'b' does, and 's' scales it in SI bytes:
+// std::format("{:.2f}", 1_kB + 1_KiB) == "2024.00B" and
+// std::format("{:s}", 1_kB + 1_KiB) == "2.024kB".
 template<typename Unit, typename Rep, typename Precision>
-    requires quanta::data::_has_suffix<Unit, typename Precision::type>
+    requires quanta::data::_formattable<Unit, typename Precision::type>
 struct formatter<quanta::data::quantity<Unit, Rep, Precision>, char>
     : private quanta::detail::_unit_formatter<quanta::data::_format_traits<Unit, typename Precision::type>> {
     using quanta::detail::_unit_formatter<quanta::data::_format_traits<Unit, typename Precision::type>>::parse;
