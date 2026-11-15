@@ -89,8 +89,9 @@ size<double, std::kilo> exact = 1_KiB;      // 1.024 kB
 
 Mixing SI and IEC precisions gives a common type with the greatest precision
 that divides both (8 B for kB and KiB, 64 B for MB and MiB); like any
-precision without a symbol, it is not formattable until converted to a named
-one.
+precision without a symbol, it has no `{}` or `to_string(q)` form until
+converted to a named one, but the base-unit and scaled forms show it (see
+Formatting below).
 
 ### std::chrono Interop
 
@@ -280,9 +281,10 @@ size in IEC units:
 Rates use the same units per second. It chooses the largest unit of the family
 in which the magnitude is at least 1, or the smallest if there is none, and
 shows zero and non-finite values (infinity, NaN) in the family's smallest
-unit (`bit` or `bit/s` for the bit family, `B` or `B/s` otherwise). Other precisions (only those given a symbol by
+unit (`bit` or `bit/s` for the bit family, `B` or `B/s` otherwise). Other precisions with a symbol (only those given one by
 specializing `precision_symbol`, see below) are shown in their own unit, with
-the count as a `double`.
+the count as a `double`; precisions with no symbol are scaled in SI bytes (see
+below).
 
 ```cpp
 std::format("{:s}", 1500_kB);                // "1.5MB"
@@ -307,12 +309,26 @@ marker followed by `>8.1f`, not right-alignment filled with `s`. Only one
 marker is allowed; a second one is passed on as part of the numeric spec and
 is a format error.
 
-Precisions with no symbol (such as the 8 B common type of `kilobytes` and
-`kibibytes`, or the 450,000,000 B of `5_Mbit_per_s * 2h`) are not formattable,
-with or without a marker; convert them to a named precision first. There is no
-SI-prefix rule, so `size<int64_t, std::milli>` is not "mB". To give another
-precision a symbol, specialize `quanta::data::precision_symbol` (it applies to
-both sizes and rates):
+A precision with no symbol (such as the 8 B common type of `kilobytes` and
+`kibibytes`, the 8 B/s common type of their rates, or the 450,000,000 B of
+`5_Mbit_per_s * 2h`) has no unit of its own: `{}` and `to_string(q)` do not
+compile for it, and a spec without a marker renders the value in B or B/s. The
+`b` and `s` markers and tags work for it. Such a precision belongs to no
+family, so `s` scales it in SI bytes (`B`, `kB`, `MB`, `GB`, or the `/s`
+forms), as for bytes, whichever precisions it came from:
+
+```cpp
+std::format("{:b}", 1_kB + 1_KiB);           // "2024B"
+std::format("{:.2f}", 1_kB + 1_KiB);         // "2024.00B"
+std::format("{:s}", 1_kB + 1_KiB);           // "2.024kB"
+std::format("{:s}", 5_Mbit_per_s * 2h);      // "4.5GB"
+std::format("{:s}", 1_kB_per_s + 1_KiB_per_s); // "2.024kB/s"
+to_string(1_kB + 1_KiB, quanta::data::scaled); // "2.024kB"
+```
+
+There is no SI-prefix rule, so `size<int64_t, std::milli>` is not "mB". To give
+another precision a symbol, specialize `quanta::data::precision_symbol` (it
+applies to both sizes and rates):
 
 ```cpp
 template<>

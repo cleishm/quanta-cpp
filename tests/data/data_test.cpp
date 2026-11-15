@@ -708,8 +708,8 @@ TEST_CASE("to_string of computed quantities", "[format]") {
     REQUIRE(to_string(100_kbit_per_s * 250ms) == "25000bit");
 }
 
-// Precisions with no symbol are not formattable at all, rather than failing
-// at runtime.
+// Precisions with no symbol have no to_string(q), rather than failing at
+// runtime, but have the base-unit and scaled forms.
 template<typename Q>
 concept has_to_string = requires(Q q) { to_string(q); };
 template<typename Q>
@@ -731,8 +731,8 @@ static_assert(!has_to_string<decltype(megabits_per_second(5) * 2h)>);
 static_assert(!has_to_string<rate<int64_t, std::ratio<1048576, 60>>>);
 static_assert(has_base_to_string<kibibytes>);
 static_assert(has_scaled_to_string<bits_per_second>);
-static_assert(!has_base_to_string<eight_bytes>);
-static_assert(!has_scaled_to_string<eight_bytes>);
+static_assert(has_base_to_string<eight_bytes>);
+static_assert(has_scaled_to_string<eight_bytes>);
 
 // to_string(q, base_unit) and to_string(q, scaled), and the equivalent {:b}
 // and {:s} formatting, which must agree exactly.
@@ -886,12 +886,55 @@ TEST_CASE("a user precision symbol is shown in its own unit when scaled", "[form
     check_forms(terabytes_per_second(2), "2000000000000B/s", "2TB/s");
 }
 
+// Precisions with no symbol of their own still have a base unit, and are
+// scaled in SI bytes (B is SI), whatever the precisions they came from; with
+// std::format, a spec without a marker renders in the base unit too.
+TEST_CASE("precisions with no symbol render in the base unit or scaled in SI bytes", "[format]") {
+    using kilobytes_kibibytes_per_second = std::common_type_t<kilobytes_per_second, kibibytes_per_second>;
+    using bytes_e5 = size<int64_t, std::ratio<1, 100000>>;
+    using ten_bytes = size<int64_t, std::ratio<10>>;
+    REQUIRE(to_string(1_kB + 1_KiB, base_unit) == "2024B");
+    REQUIRE(to_string(1_kB + 1_KiB, scaled) == "2.024kB");
+    REQUIRE(to_string(1_MB + 1_MiB, scaled) == "2.048576MB");
+    REQUIRE(to_string(5_Mbit_per_s * 2h, base_unit) == "4500000000B");
+    REQUIRE(to_string(5_Mbit_per_s * 2h, scaled) == "4.5GB");
+    REQUIRE(to_string(kilobytes_kibibytes_per_second(1000), base_unit) == "8000B/s");
+    REQUIRE(to_string(kilobytes_kibibytes_per_second(1000), scaled) == "8kB/s");
+    REQUIRE(to_string(eight_bytes(0), scaled) == "0B");
+    REQUIRE(to_string(ten_bytes(75000), base_unit) == "750000B");
+    REQUIRE(to_string(ten_bytes(75000), scaled) == "750kB");
+    REQUIRE(to_string(bytes_e5(5), base_unit) == "0.00005B");
+    REQUIRE(to_string(bytes_e5(5), scaled) == "0.00005B"); // nothing below B
+    REQUIRE(to_string(size<int64_t, std::milli>(2500), scaled) == "2.5B");
+#if CONFIG_QUANTA_STD_FORMAT
+    REQUIRE(std::format("{:b}", 1_kB + 1_KiB) == "2024B");
+    REQUIRE(std::format("{:s}", 1_kB + 1_KiB) == "2.024kB");
+    REQUIRE(std::format("{:s.2f}", 1_kB + 1_KiB) == "2.02kB");
+    REQUIRE(std::format("{:.2f}", 1_kB + 1_KiB) == "2024.00B");
+    REQUIRE(std::format("{:8.1f}", 1_kB + 1_KiB) == "  2024.0B");
+    REQUIRE(std::format("{:s}", 5_Mbit_per_s * 2h) == "4.5GB");
+    REQUIRE(std::format("{:b}", ten_bytes(75000)) == "750000B");
+    REQUIRE(std::format("{:s}", ten_bytes(75000)) == "750kB");
+    REQUIRE(std::format("{:.2f}", bytes_e5(5)) == "0.00B");
+    REQUIRE(std::format("{:s}", kilobytes_kibibytes_per_second(1000)) == "8kB/s");
+    for (const auto q : {eight_bytes(253), eight_bytes(-1), eight_bytes(0)}) {
+        REQUIRE(std::format("{:b}", q) == to_string(q, base_unit));
+        REQUIRE(std::format("{:s}", q) == to_string(q, scaled));
+    }
+    REQUIRE(std::format("{:b}", bytes_e5(5)) == to_string(bytes_e5(5), base_unit));
+    REQUIRE(std::format("{:s}", bytes_e5(5)) == to_string(bytes_e5(5), scaled));
+    // "{}" needs a unit of its own (a compile error for a constant format string)
+    eight_bytes b(1);
+    REQUIRE_THROWS_AS(std::vformat("{}", std::make_format_args(b)), std::format_error);
+#endif
+}
+
 #if CONFIG_QUANTA_STD_FORMAT
 static_assert(std::is_default_constructible_v<std::formatter<bytes, char>>);
 static_assert(std::is_default_constructible_v<std::formatter<gibibytes, char>>);
 static_assert(std::is_default_constructible_v<std::formatter<bits_per_second, char>>);
-static_assert(!std::is_default_constructible_v<std::formatter<eight_bytes, char>>);
-static_assert(!std::is_default_constructible_v<std::formatter<size<int64_t, std::milli>, char>>);
+static_assert(std::is_default_constructible_v<std::formatter<eight_bytes, char>>);
+static_assert(std::is_default_constructible_v<std::formatter<size<int64_t, std::milli>, char>>);
 
 TEST_CASE("std::format support", "[format]") {
     REQUIRE(std::format("{}", bits(12)) == "12bit");

@@ -848,10 +848,10 @@ constexpr _unit_form _parse_unit_marker(std::format_parse_context& ctx, const ch
 // unit; a marker selects another unit. Traits describes the formatted type:
 // - markers: the marker letters accepted ("bs", or "pbs" with the power form)
 // - has_own_unit: whether the type has a unit label of its own. If not, "{}"
-//   is a format error, raised by no_own_unit_error() (which calls
-//   _format_error with the domain's message, so that the message shows at
-//   the point of the diagnostic), and any other spec without a marker
-//   renders in the base unit.
+//   (and "{:p}", its power form) is a format error, raised by
+//   no_own_unit_error() (which calls _format_error with the domain's message,
+//   so that the message shows at the point of the diagnostic), and any other
+//   spec without a marker, or with only 'p', renders in the base unit.
 // - own_unit(power): the own unit (or its power form), obtained before
 //   anything is written; append_own_unit(out, own_unit) appends it
 // - base_display(q), scaled_display(q): the value (as .value) and label in
@@ -870,7 +870,7 @@ public:
         auto it = ctx.begin();
         if (it == ctx.end() || *it == '}') {
             if constexpr (!Traits::has_own_unit) {
-                if (_form == _unit_form::own) {
+                if (_form == _unit_form::own || _form == _unit_form::power) {
                     Traits::no_own_unit_error();
                 }
             }

@@ -807,8 +807,8 @@ TEST_CASE("to_string for areas and volumes", "[format]") {
     REQUIRE(to_string(centimeters(10) * centimeters(10) * centimeters(10)) == "1000mL");
 }
 
-// Precisions with no conventional suffix are not formattable at all, rather
-// than failing at runtime.
+// Precisions with no conventional suffix have no to_string(q), rather than
+// failing at runtime.
 using fifth_millimeters = length<int64_t, std::ratio<1, 5000>>;
 template<typename Q>
 concept has_to_string = requires(Q q) { to_string(q); };
@@ -818,7 +818,7 @@ static_assert(!has_to_string<fifth_millimeters>);
 static_assert(!has_to_string<std::common_type_t<inches, millimeters>>);
 
 // Areas and volumes have no SI-prefix rule: only the listed precisions have
-// suffixes, so e.g. 10⁻³ m² (meters x millimeters) is not formattable.
+// suffixes, so e.g. 10⁻³ m² (meters x millimeters) has no to_string(q).
 template<typename Q>
 concept has_power_to_string = requires(Q q) { to_string(q, power_form); };
 using milli_square_meters = area<int64_t, std::milli>;
@@ -842,7 +842,7 @@ static_assert(has_to_string<volume<int64_t, std::atto>>);
 static_assert(has_to_string<area<int64_t, std::atto>>);
 static_assert(!has_to_string<area<int64_t, std::nano>>); // not µL: that is a volume
 
-// The base-unit and scaled forms are available for exactly the same types.
+// The base-unit and scaled forms are available for every precision.
 template<typename Q>
 concept has_base_to_string = requires(Q q) { to_string(q, base_unit); };
 template<typename Q>
@@ -851,11 +851,11 @@ static_assert(has_base_to_string<meters>);
 static_assert(has_base_to_string<square_feet>);
 static_assert(has_scaled_to_string<liters>);
 static_assert(has_scaled_to_string<acres>);
-static_assert(!has_base_to_string<fifth_millimeters>);
-static_assert(!has_scaled_to_string<fifth_millimeters>);
-static_assert(!has_base_to_string<milli_square_meters>);
-static_assert(!has_scaled_to_string<milli_square_meters>);
-static_assert(!has_scaled_to_string<micro_cubic_meters_x10>);
+static_assert(has_base_to_string<fifth_millimeters>);
+static_assert(has_scaled_to_string<fifth_millimeters>);
+static_assert(has_base_to_string<milli_square_meters>);
+static_assert(has_scaled_to_string<milli_square_meters>);
+static_assert(has_scaled_to_string<micro_cubic_meters_x10>);
 
 // to_string(q, base_unit) and to_string(q, scaled), and the equivalent {:b}
 // and {:s} formatting, which must agree exactly.
@@ -1004,14 +1004,61 @@ TEST_CASE("base-unit and scaled forms", "[format]") {
     check_forms(us_gallons(-5), "-0.01892705892m³", "-5gal");
 }
 
+// Precisions with no suffix of their own still have a base unit, and are
+// scaled to the same units as metric precisions; with std::format, a spec
+// without a marker (or with only 'p') renders in the base unit too.
+TEST_CASE("precisions with no suffix render in the base unit or scaled", "[format]") {
+    using meters_inches = std::common_type_t<meters, inches>; // 0.2 mm
+    using feet2_meters2 = std::common_type_t<square_feet, square_meters>;
+    using meters_e5 = length<int64_t, std::ratio<1, 100000>>;
+    STATIC_REQUIRE(std::is_same_v<meters_inches, fifth_millimeters>);
+    REQUIRE(to_string(1_m + 1_in, base_unit) == "1.0254m");
+    REQUIRE(to_string(1_m + 1_in, scaled) == "1.0254m");
+    REQUIRE(to_string(fifth_millimeters(7), base_unit) == "0.0014m");
+    REQUIRE(to_string(fifth_millimeters(7), scaled) == "1.4mm");
+    REQUIRE(to_string(fifth_millimeters(-7), scaled) == "-1.4mm");
+    REQUIRE(to_string(feet2_meters2(1000), base_unit) == "0.00064m²");
+    REQUIRE(to_string(feet2_meters2(1000), scaled) == "640mm²");
+    REQUIRE(to_string(meters_e5(5), base_unit) == "0.00005m");
+    REQUIRE(to_string(meters_e5(5), scaled) == "50µm");
+    REQUIRE(to_string(meters_e5(0), scaled) == "0m");
+    REQUIRE(to_string(milli_square_meters(25), base_unit) == "0.025m²");
+    REQUIRE(to_string(milli_square_meters(25), scaled) == "25000mm²");
+    REQUIRE(to_string(micro_cubic_meters_x10(150), base_unit) == "0.0015m³");
+    REQUIRE(to_string(micro_cubic_meters_x10(150), scaled) == "1.5L");
+#if CONFIG_QUANTA_STD_FORMAT
+    REQUIRE(std::format("{:b}", 1_m + 1_in) == "1.0254m");
+    REQUIRE(std::format("{:s}", fifth_millimeters(7)) == "1.4mm");
+    REQUIRE(std::format("{:.2f}", 1_m + 1_in) == "1.03m");
+    REQUIRE(std::format("{:8.2f}", 1_m + 1_in) == "    1.03m");
+    REQUIRE(std::format("{:p.2f}", 1_m + 1_in) == "1.03m");
+    REQUIRE(std::format("{:b}", meters_e5(5)) == "0.00005m");
+    REQUIRE(std::format("{:s}", meters_e5(5)) == "50µm");
+    REQUIRE(std::format("{:s.1f}", meters_e5(5)) == "50.0µm");
+    REQUIRE(std::format("{:.2f}", milli_square_meters(2500)) == "2.50m²");
+    REQUIRE(std::format("{:s}", micro_cubic_meters_x10(150)) == "1.5L");
+    for (const auto q : {fifth_millimeters(5127), fifth_millimeters(7), fifth_millimeters(0)}) {
+        REQUIRE(std::format("{:b}", q) == to_string(q, base_unit));
+        REQUIRE(std::format("{:s}", q) == to_string(q, scaled));
+    }
+    REQUIRE(std::format("{:b}", meters_e5(5)) == to_string(meters_e5(5), base_unit));
+    REQUIRE(std::format("{:s}", meters_e5(5)) == to_string(meters_e5(5), scaled));
+    // "{}" and "{:p}" need a unit of its own (a compile error for a constant
+    // format string)
+    fifth_millimeters l(5);
+    REQUIRE_THROWS_AS(std::vformat("{}", std::make_format_args(l)), std::format_error);
+    REQUIRE_THROWS_AS(std::vformat("{:p}", std::make_format_args(l)), std::format_error);
+#endif
+}
+
 #if CONFIG_QUANTA_STD_FORMAT
 static_assert(std::is_default_constructible_v<std::formatter<meters, char>>);
 static_assert(std::is_default_constructible_v<std::formatter<nautical_miles, char>>);
-static_assert(!std::is_default_constructible_v<std::formatter<fifth_millimeters, char>>);
+static_assert(std::is_default_constructible_v<std::formatter<fifth_millimeters, char>>);
 static_assert(std::is_default_constructible_v<std::formatter<square_feet, char>>);
 static_assert(std::is_default_constructible_v<std::formatter<us_gallons, char>>);
-static_assert(!std::is_default_constructible_v<std::formatter<milli_square_meters, char>>);
-static_assert(!std::is_default_constructible_v<std::formatter<micro_cubic_meters_x10, char>>);
+static_assert(std::is_default_constructible_v<std::formatter<milli_square_meters, char>>);
+static_assert(std::is_default_constructible_v<std::formatter<micro_cubic_meters_x10, char>>);
 
 TEST_CASE("std::format support", "[format]") {
     REQUIRE(std::format("{}", nanometers(850)) == "850nm");

@@ -12,6 +12,12 @@ The library follows [semantic versioning](https://semver.org/).
   (kB, MB, GB) and IEC bytes (KiB, MiB, GiB), as exact ratios of the byte, with
   `std::chrono` interop (`size / duration = rate`)
 
+### Changes
+
+- electro, spatial and data now format precisions with no unit symbol (such as
+  `1_mm + 1_in` or `1_kB + 1_KiB`) with `{:b}`, `{:s}` and marker-less specs,
+  as frequency does; `{}` and `to_string(q)` still need a named precision
+
 ## v0.1.0
 
 First release. quanta merges four libraries — thermo-cpp, frequency-cpp,

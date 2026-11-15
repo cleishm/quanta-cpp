@@ -471,6 +471,45 @@ TEST_CASE("to_string of cross-unit results", "[format]") {
     REQUIRE(to_string(watts(100) * std::chrono::hours(5)) == "500Wh");
 }
 
+// Precisions with no suffix of their own still have a base unit, and are
+// scaled with the SI prefixes; with std::format, a spec without a marker
+// renders in the base unit too.
+TEST_CASE("precisions with no suffix render in the base unit or scaled", "[format]") {
+    using eighth_volts = quantity<volt_unit, int64_t, std::ratio<1, 8>>;
+    using volts_e5 = quantity<volt_unit, int64_t, std::ratio<1, 100000>>;
+    using charge_e = charge<int64_t, std::ratio<9, 250>>; // 0.01 mAh
+    REQUIRE(to_string(eighth_volts(2), base_unit) == "0.25V");
+    REQUIRE(to_string(eighth_volts(2), scaled) == "250mV");
+    REQUIRE(to_string(eighth_volts(-24), scaled) == "-3V");
+    REQUIRE(to_string(volts_e5(165000), base_unit) == "1.65V");
+    REQUIRE(to_string(volts_e5(165000), scaled) == "1.65V");
+    REQUIRE(to_string(volts_e5(5), base_unit) == "0.00005V");
+    REQUIRE(to_string(volts_e5(5), scaled) == "50µV");
+    REQUIRE(to_string(volts_e5(0), scaled) == "0V");
+    // Not in Ah: only the hour-based precisions themselves render in Ah
+    REQUIRE(to_string(charge_e(10000), base_unit) == "360C");
+    REQUIRE(to_string(charge_e(10000), scaled) == "360C");
+#if CONFIG_QUANTA_STD_FORMAT
+    REQUIRE(std::format("{:b}", eighth_volts(2)) == "0.25V");
+    REQUIRE(std::format("{:s}", eighth_volts(2)) == "250mV");
+    REQUIRE(std::format("{:.2f}", eighth_volts(2)) == "0.25V");
+    REQUIRE(std::format("{:b}", volts_e5(5)) == "0.00005V");
+    REQUIRE(std::format("{:s}", volts_e5(5)) == "50µV");
+    REQUIRE(std::format("{:s.1f}", volts_e5(5)) == "50.0µV");
+    REQUIRE(std::format("{:.2f}", volts_e5(165000)) == "1.65V");
+    REQUIRE(std::format("{:8.2f}", volts_e5(165000)) == "    1.65V");
+    for (const auto q : {volts_e5(165000), volts_e5(5), volts_e5(-42), volts_e5(0)}) {
+        REQUIRE(std::format("{:b}", q) == to_string(q, base_unit));
+        REQUIRE(std::format("{:s}", q) == to_string(q, scaled));
+    }
+    REQUIRE(std::format("{:b}", eighth_volts(3)) == to_string(eighth_volts(3), base_unit));
+    REQUIRE(std::format("{:s}", eighth_volts(3)) == to_string(eighth_volts(3), scaled));
+    // "{}" needs a unit of its own (a compile error for a constant format string)
+    volts_e5 v(5);
+    REQUIRE_THROWS_AS(std::vformat("{}", std::make_format_args(v)), std::format_error);
+#endif
+}
+
 #if CONFIG_QUANTA_STD_FORMAT
 TEST_CASE("std::format support", "[format]") {
     REQUIRE(std::format("{}", millivolts(3300)) == "3300mV");
